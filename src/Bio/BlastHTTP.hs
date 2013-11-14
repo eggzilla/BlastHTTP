@@ -1,7 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Parse RNAz output
---   For more information on RNAz consult: <http://www.tbi.univie.ac.at/~wash/RN 
+-- | Blast REST service 
 --module Bio.BlastHTTP (
 --                       blastHTTP
 --                      ) where
@@ -16,18 +15,20 @@ import qualified Data.ByteString.Lazy as L
 import Control.Monad.IO.Class (liftIO)    
 
 -- |
-
-
-
 --blastHTTP = do
 main :: IO ()
 main = do
-  let rid = "8752WHW0015"
+  let program = "blastn"
+  let database = "refseq_genomic"
+  let query = "AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG"
+  let rid = "89DY46RJ015"
+  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG
   runResourceT $ do
          manager <- liftIO $ newManager def
          --send query and retrieve RID to track status of computation
-         --http://www.ncbi.nlm.nih.gov/blast/Blast.cgiCMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
-         
+         --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
+         req0 <- liftIO $ parseUrl ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
+                    
          --wait for computation to finish or fail
          --"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
 
@@ -40,8 +41,12 @@ main = do
                       redirectCount = 0
 --                      checkStatus = \_ _ -> Nothing
                     }
-         res2 <- http req2 manager
-         responseBody res2 $$+- sinkFile "test.xml"
+         res0 <- http req0 manager
+         --rid_response <- responseBody res0
+         responseBody res0 $$+- sinkFile "test.xml"        
+         --print rid_response
+     --    res2 <- http req2 manager
+     --    responseBody res2 $$+- sinkFile "test.xml"
                                                    
 
                                                             
