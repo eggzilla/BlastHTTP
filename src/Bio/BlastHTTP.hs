@@ -19,8 +19,7 @@ import Control.Monad
 import Text.XML.HXT.Core
 import Network
 import qualified Data.Conduit.List as CL
---import Control.Monad.Trans.Resource
-
+import Text.Regex.Posix
 
 -- | Parse XML results in XML format
 parseXML :: String -> IOStateArrow s b XmlTree              
@@ -54,7 +53,14 @@ retrieveSessionStatus rid = do
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
   let statusXMLString = (L8.unpack statusXml)
   return statusXMLString
-  
+
+-- retrieve result in blastxml format 
+-- http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=$rid&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get
+retrieveResult rid = do
+  statusXml <- withSocketsDo
+    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get" ++ rid)
+  let resultXMLString = (L8.unpack statusXml)
+  return resultXMLstring
 
 -- |
 --blastHTTP = do
@@ -80,6 +86,7 @@ main = do
   --"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
   status <- (retrieveSessionStatus rid)
   print status
+
   --print statusXMLString
   
 --  rid <- runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value"
