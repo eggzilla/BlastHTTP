@@ -71,6 +71,13 @@ retrieveResult rid = do
   let resultXMLString = (L8.unpack statusXml)
   return resultXMLstring
 
+-- Check if job is completed, if yes retrieve results, otherwise check again or return with an error message in case of failure
+checkStatus statusXMLString rid = 
+  | statusXMLString =~ "Status=READY" :: Bool = retrieveResult
+  | statusXMLString =~ "Status=WAITING" :: Bool = checkStatus (retrieveSessionStatus rid)
+  | statusXMLString =~ "Status=FAILED" :: Bool = "Search $rid failed; please report to blast-help\@ncbi.nlm.nih.gov.\n"
+  | statusXMLString =~ "Status=UNKNOWN" :: Bool = "Error - Search $rid expired"
+
 -- |
 --blastHTTP = do
 main :: IO ()
@@ -83,4 +90,6 @@ main = do
   rid <- sendQuery program database query
   -- retrieve session status
   status <- (retrieveSessionStatus rid)
-  print status
+  --check if job is finished and retrieve results 
+  result <- checkStatus status rid
+  print result
