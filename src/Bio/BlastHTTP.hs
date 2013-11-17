@@ -15,6 +15,7 @@ import Data.Conduit.Binary (sinkFile)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Control.Monad.IO.Class (liftIO)    
+import Control.Monad
 import Text.XML.HXT.Core
 import Network
 import qualified Data.Conduit.List as CL
@@ -46,6 +47,15 @@ getRID = atName "RID" >>>
   rid_value <- getAttrValue "value" -< memeResult
   returnA -< rid_value
 
+-- retrieve session status
+--"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
+retrieveSessionStatus rid = do
+  statusXml <- withSocketsDo
+    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
+  let statusXMLString = (L8.unpack statusXml)
+  return statusXMLString
+  
+
 -- |
 --blastHTTP = do
 main :: IO ()
@@ -58,15 +68,23 @@ main = do
   --send query and retrieve RID to track status of computation
   --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
   --req0 <- liftIO $ parseUrl ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
-  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG
+
+  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG    
   requestXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
   let requestXMLString = (L8.unpack requestXml)
-  rid <- runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value"
-  print rid
+  rid <- liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
+--  print rid
                     
   --wait for computation to finish or fail
   --"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
+  status <- (retrieveSessionStatus rid)
+  print status
+  --print statusXMLString
+  
+--  rid <- runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value"
+--  print rid      
+
 
   --get Result in blastxml format 
   --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=8752WHW0015&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get
