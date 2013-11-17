@@ -46,8 +46,17 @@ getRID = atName "RID" >>>
   rid_value <- getAttrValue "value" -< memeResult
   returnA -< rid_value
 
+-- send query and retrieve RID to track status of computation
+-- http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
+sendQuery program database query = do
+  requestXml <- withSocketsDo
+    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
+  let requestXMLString = (L8.unpack requestXml)
+  rid <- liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
+  return rid
+
 -- retrieve session status
---"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
+-- "http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
 retrieveSessionStatus rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
@@ -69,35 +78,9 @@ main = do
   let program = "blastn"
   let database = "refseq_genomic"
   let query = "AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG"
-  let testrid = "89DY46RJ015"
 
-  --send query and retrieve RID to track status of computation
-  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
-  --req0 <- liftIO $ parseUrl ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
-
-  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG    
-  requestXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
-  let requestXMLString = (L8.unpack requestXml)
-  rid <- liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
---  print rid
-                    
-  --wait for computation to finish or fail
-  --"http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
+  -- send query and retrive session id                 
+  rid <- sendQuery program database query
+  -- retrieve session status
   status <- (retrieveSessionStatus rid)
   print status
-
-  --print statusXMLString
-  
---  rid <- runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value"
---  print rid      
-
-
-  --get Result in blastxml format 
-  --http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=8752WHW0015&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get
-  --req <- liftIO $ parseUrl ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
- 
-                                                   
-
-                                                            
-                                                            
