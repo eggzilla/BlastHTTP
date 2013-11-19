@@ -15,11 +15,14 @@ import Data.Conduit.Binary (sinkFile)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Control.Monad.IO.Class (liftIO)    
-import Control.Monad
+import qualified Control.Monad as CM
 import Text.XML.HXT.Core
 import Network
 import qualified Data.Conduit.List as CL
-import Text.Regex.Posix
+import Data.List
+import Control.Monad.Error as CM
+import Control.Concurrent
+
 
 -- | Parse XML results in XML format
 parseXML :: String -> IOStateArrow s b XmlTree              
@@ -52,11 +55,12 @@ sendQuery program database query = do
   requestXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
   let requestXMLString = (L8.unpack requestXml)
-  rid <- liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
+  rid <- CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   return rid
 
 -- retrieve session status
 -- "http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
+retrieveSessionStatus :: String -> IO String 
 retrieveSessionStatus rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
@@ -65,31 +69,61 @@ retrieveSessionStatus rid = do
 
 -- retrieve result in blastxml format 
 -- http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=$rid&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get
+retrieveResult :: String -> IO String 
 retrieveResult rid = do
   statusXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get" ++ rid)
+    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
   let resultXMLString = (L8.unpack statusXml)
-  return resultXMLstring
+  print "Retrieved result"
+  return resultXMLString
 
--- Check if job is completed, if yes retrieve results, otherwise check again or return with an error message in case of failure
-checkStatus statusXMLString rid = 
-  | statusXMLString =~ "Status=READY" :: Bool = retrieveResult
-  | statusXMLString =~ "Status=WAITING" :: Bool = checkStatus (retrieveSessionStatus rid)
-  | statusXMLString =~ "Status=FAILED" :: Bool = "Search $rid failed; please report to blast-help\@ncbi.nlm.nih.gov.\n"
-  | statusXMLString =~ "Status=UNKNOWN" :: Bool = "Error - Search $rid expired"
+-- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
+--checkSessionStatus :: String -> IO [Char]
+--checkSessionStatus ::IO String -> IO String -> IO String
+--checkSessionStatus statusXMLString rid 
+--  | isInfixOfIO "Status=READY" statusXMLString = retrieveResult rid
+--  | isInfixOfIO "Status=WAITING" statusXMLString = checkSessionStatus (retrieveSessionStatus rid) rid
+--  | isInfixOf "Status=FAILED" statusXMLString = "Search rid failed. please report to blast-help at ncbi.nlm.nih.gov." 
+--  | isInfixOf "Status=UNKNOWN" statusXMLString = "Error - Search rid expired"
+--  | otherwise = liftIO "Error"
 
--- |
+checkSessionStatus rid counter = do
+--  runErrorT $ do
+    let counter2 = counter + 1
+    let counter2string = show counter2
+    threadDelay 5000000
+    print ("Check session status" ++ counter2string)
+    status <- retrieveSessionStatus rid
+    let readyString = "Status=READY"
+    let failureString = "Status=FAILURE"
+    let expiredString = "Status=UNKNOWN"
+    --CM.when (isInfixOf failureString status)(throwError "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n")
+    --CM.when (isInfixOf expiredString status)(throwError "Search $rid expired.\n")
+    results <- waitOrRetrieve (isInfixOf readyString status) rid counter2
+    return results
+
+waitOrRetrieve :: Bool -> String -> Int -> IO String
+waitOrRetrieve ready rid counter
+  | ready  = retrieveResult rid
+  | otherwise = checkSessionStatus rid counter
+ 
+--isStatusReady :: IO String ->  String ->  Bool
+--isStatusReady checkString status = do
+  --let testfunction = isInfixOf checkString
+  --checkString <- unsafePerformIO checkStringIO
+--  bool <- isInfixOf checkString status
+--  return bool
+
 --blastHTTP = do
-main :: IO ()
+--main :: IO ()
 main = do
   let program = "blastn"
   let database = "refseq_genomic"
-  let query = "AATATTTTTTTTTTTTTTTTTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGGGGGGGG"
-
-  -- send query and retrive session id                 
+  let query = "GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC"
+  let counter = 1
+  -- send query and retrieve session id                 
   rid <- sendQuery program database query
-  -- retrieve session status
-  status <- (retrieveSessionStatus rid)
+  print rid
   --check if job is finished and retrieve results 
-  result <- checkStatus status rid
+  result <- checkSessionStatus rid counter
   print result
