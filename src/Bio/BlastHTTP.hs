@@ -9,10 +9,7 @@
 module Main where
     
 import Network.HTTP.Conduit 
-import Data.Conduit
-import System.Environment (getArgs)    
-import Data.Conduit.Binary (sinkFile)
-import qualified Data.ByteString.Lazy as L
+import Data.Conduit    
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Control.Monad.IO.Class (liftIO)    
 import qualified Control.Monad as CM
@@ -50,7 +47,6 @@ getRID = atName "RID" >>>
   returnA -< rid_value
 
 -- send query and retrieve RID to track status of computation
--- http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=$program&DATABASE=$database&QUERY=" . $encoded_query;
 sendQuery program database query = do
   requestXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
@@ -59,7 +55,6 @@ sendQuery program database query = do
   return rid
 
 -- retrieve session status
--- "http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=$rid"
 retrieveSessionStatus :: String -> IO String 
 retrieveSessionStatus rid = do
   statusXml <- withSocketsDo
@@ -68,7 +63,6 @@ retrieveSessionStatus rid = do
   return statusXMLString
 
 -- retrieve result in blastxml format 
--- http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=$rid&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get
 retrieveResult :: String -> IO String 
 retrieveResult rid = do
   statusXml <- withSocketsDo
@@ -78,15 +72,7 @@ retrieveResult rid = do
   return resultXMLString
 
 -- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
---checkSessionStatus :: String -> IO [Char]
---checkSessionStatus ::IO String -> IO String -> IO String
---checkSessionStatus statusXMLString rid 
---  | isInfixOfIO "Status=READY" statusXMLString = retrieveResult rid
---  | isInfixOfIO "Status=WAITING" statusXMLString = checkSessionStatus (retrieveSessionStatus rid) rid
---  | isInfixOf "Status=FAILED" statusXMLString = "Search rid failed. please report to blast-help at ncbi.nlm.nih.gov." 
---  | isInfixOf "Status=UNKNOWN" statusXMLString = "Error - Search rid expired"
---  | otherwise = liftIO "Error"
-
+checkSessionStatus :: String -> Int -> IO String
 checkSessionStatus rid counter = do
 --  runErrorT $ do
     let counter2 = counter + 1
@@ -107,12 +93,6 @@ waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
  
---isStatusReady :: IO String ->  String ->  Bool
---isStatusReady checkString status = do
-  --let testfunction = isInfixOf checkString
-  --checkString <- unsafePerformIO checkStringIO
---  bool <- isInfixOf checkString status
---  return bool
 
 --blastHTTP = do
 --main :: IO ()
