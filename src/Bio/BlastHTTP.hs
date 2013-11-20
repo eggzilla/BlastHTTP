@@ -2,12 +2,11 @@
 {-# LANGUAGE Arrows #-}
 
 -- | Blast REST service 
---module Bio.BlastHTTP (
---                       blastHTTP
---                      ) where
+module Bio.BlastHTTP (
+                       blastHTTP
+                     ) where
 
-module Main where
-    
+
 import Network.HTTP.Conduit 
 import Data.Conduit    
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -68,7 +67,7 @@ retrieveResult rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
   let resultXMLString = (L8.unpack statusXml)
-  print "Retrieved result"
+  --print "Retrieved result"
   return resultXMLString
 
 -- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
@@ -77,8 +76,8 @@ checkSessionStatus rid counter = do
 --  runErrorT $ do
     let counter2 = counter + 1
     let counter2string = show counter2
-    threadDelay 5000000
-    print ("Check session status" ++ counter2string)
+    threadDelay 60000000
+    --print ("Check session status" ++ counter2string)
     status <- retrieveSessionStatus rid
     let readyString = "Status=READY"
     let failureString = "Status=FAILURE"
@@ -94,16 +93,15 @@ waitOrRetrieve ready rid counter
   | otherwise = checkSessionStatus rid counter
  
 
---blastHTTP = do
---main :: IO ()
-main = do
-  let program = "blastn"
-  let database = "refseq_genomic"
-  let query = "GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC"
+blastHTTP program database query = do
+  -- let program = "blastn"
+  -- let database = "refseq_genomic"
+  -- let query = "GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC"
   let counter = 1
   -- send query and retrieve session id                 
   rid <- sendQuery program database query
-  print rid
   --check if job is finished and retrieve results 
   result <- checkSessionStatus rid counter
-  print result
+  return result
+
+      

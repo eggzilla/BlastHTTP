@@ -15,11 +15,22 @@ license:             GPL-3
 license-file:        LICENSE
 author:              Florian Eggenhofer
 maintainer:          egg@tbi.univie.ac.at
--- copyright:           
+-- copyright:
+homepage:	     https://github.com/eggzilla/BlastHTTP
 category:            Bioinformatics
+
 build-type:          Simple
 cabal-version:       >=1.8
-executable BlastHTTP
-  Hs-Source-Dirs:      ./src/Bio/
-  main-is:	       BlastHTTP.hs  
+
+library
+  -- Modules exported by the library.
+  exposed-modules:     Bio.BlastHTTP
+  
+  -- Modules included in this library but not exported.
+  -- other-modules:       
+  
+  -- Other library packages from which modules are imported.
   build-depends:       base >=4.5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl
+  
+  -- Directories containing source files.
+  hs-source-dirs:      src
