@@ -46,9 +46,9 @@ getRID = atName "RID" >>>
   returnA -< rid_value
 
 -- send query and retrieve RID to track status of computation
-sendQuery program database query = do
+sendQuery program database querySequence entrezQuery = do
   requestXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ query)
+    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ entrezQuery)
   let requestXMLString = (L8.unpack requestXml)
   rid <- CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   return rid
@@ -92,16 +92,17 @@ waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
  
-
-blastHTTP program database query = do
+blastHTTP :: String -> String -> String -> String -> IO String
+blastHTTP program database querySequence entrezQuery = do
   -- let program = "blastn"
   -- let database = "refseq_genomic"
   -- let query = "GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC"
   let counter = 1
   -- send query and retrieve session id                 
-  rid <- sendQuery program database query
+  rid <- sendQuery program database querySequence entrezQuery
   --check if job is finished and retrieve results 
   result <- checkSessionStatus rid counter
   return result
 
       
+--www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC&ENTREZ_QUERY=txid10066 [ORGN]
