@@ -6,7 +6,6 @@ module Bio.BlastHTTP (
                        blastHTTP
                      ) where
 
-
 import Network.HTTP.Conduit 
 import Data.Conduit    
 import qualified Data.ByteString.Lazy.Char8 as L8
@@ -18,7 +17,7 @@ import qualified Data.Conduit.List as CL
 import Data.List
 import Control.Monad.Error as CM
 import Control.Concurrent
-
+import Data.Maybe
 
 -- | Parse XML results in XML format
 parseXML :: String -> IOStateArrow s b XmlTree              
@@ -44,15 +43,21 @@ getRID = atName "RID" >>>
   proc memeResult -> do
   rid_value <- getAttrValue "value" -< memeResult
   returnA -< rid_value
-
+      
 -- send query and retrieve RID to track status of computation
-sendQuery program database querySequence entrezQuery = do
+startSession program database querySequence entrezQuery = do
   requestXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ entrezQuery)
+--    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ entrezQuery)
+      $ sendEntrezQuery program database querySequence entrezQuery
   let requestXMLString = (L8.unpack requestXml)
   rid <- CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   return rid
 
+--sendEntrezQuery :: String -> String -> String -> Maybe String
+sendEntrezQuery program database querySequence entrezQuery 
+  | isJust entrezQuery = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ (fromJust entrezQuery))
+  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
+         
 -- retrieve session status
 retrieveSessionStatus :: String -> IO String 
 retrieveSessionStatus rid = do
@@ -91,18 +96,20 @@ waitOrRetrieve :: Bool -> String -> Int -> IO String
 waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
- 
-blastHTTP :: String -> String -> String -> String -> IO String
-blastHTTP program database querySequence entrezQuery = do
-  -- let program = "blastn"
-  -- let database = "refseq_genomic"
-  -- let query = "GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC"
+                               
+blastHTTP :: Maybe String -> Maybe String -> String -> Maybe String -> IO String
+blastHTTP programMaybe databaseMaybe querySequenceMaybe entrezQueryMaybe = do
+  let counter = 1
+  let defaultProgram = "blastn"
+  let defaultDatabase = "refseq_genomic"                  
+  let program = fromMaybe defaultProgram programMaybe
+  let database = fromMaybe defaultDatabase databaseMaybe  
+  -- query 
   let counter = 1
   -- send query and retrieve session id                 
-  rid <- sendQuery program database querySequence entrezQuery
+  rid <- startSession program database querySequenceMaybe entrezQueryMaybe
   --check if job is finished and retrieve results 
   result <- checkSessionStatus rid counter
   return result
 
       
---www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=blastn&DATABASE=refseq_genomic&QUERY=GCCGCCGUAGCUCAGCCCGGGAGAGCGCCCGGCUGAAGACC&ENTREZ_QUERY=txid10066 [ORGN]
