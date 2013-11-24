@@ -2,10 +2,14 @@
 {-# LANGUAGE Arrows #-}
 
 -- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as String
--- The function blastHTTP takes the arguments: program (blastn,blastp,..) database(refseq_genomic, nr,..) querySequence (String of nucleotide,
--- protein characters, depending on the blast program used) and the optional entrezQuery string.
--- For more information on BLAST refer to: http://blast.ncbi.nlm.nih.gov/Blast.cgi
--- Information on the webservice can be found at: http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml
+-- The function blastHTTP takes the BlastHTTPQuery datatype as argument, which contains following elements: 
+-- program (blastn,blastp,..) - Maybe String
+-- database (refseq_genomic, nr,..) - Maybe String
+-- querySequence (nucleotides or protein sequence, depending on the blast program used) - Maybe SeqData  
+-- optional entrezQuery Maybe String
+-- For more information on BLAST refer to: <http://blast.ncbi.nlm.nih.gov/Blast.cgi>
+-- Information on the webservice can be found at: <http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml>
+-- If you plan to submit more than 20 searches in one session, please look up the Usage Guidelines in the webservice information.
 module Bio.BlastHTTP (
                        blastHTTP,
                        BlastHTTPQuery
