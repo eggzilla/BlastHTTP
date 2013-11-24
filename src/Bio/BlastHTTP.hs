@@ -24,6 +24,7 @@ import Control.Monad.Error as CM
 import Control.Concurrent
 import Data.Maybe
 import Data.Either
+import Bio.Core.Sequence
 
 -- | Parse HTML results into Xml Tree datastructure
 parseHTML :: String -> IOStateArrow s0 b0 XmlTree
@@ -75,20 +76,8 @@ checkSessionStatus rid counter = do
     let counter2string = show counter2
     threadDelay 60000000
     status <- retrieveSessionStatus rid
-    let readyString = "Status=READY"
-    let failureString = "Status=FAILURE"
-    let expiredString = "Status=UNKNOWN"
-    --CM.when (isInfixOf failureString status)(throwError "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n")
-    --CM.when (isInfixOf expiredString status)(throwError "Search $rid expired.\n")
---    results <- waitOrRetrieve (isInfixOf readyString status) rid counter2
     results <- waitOrRetrieve status rid counter2
     return results
-
--- | Checks if results are ready, checks again if not or retrieves results if yes
---waitOrRetrieve :: Bool -> String -> Int -> IO (Either String BlastResult)
---waitOrRetrieve ready rid counter
---  | ready  = retrieveResult rid
---  | otherwise = checkSessionStatus rid counter
 
 waitOrRetrieve :: String -> String -> Int -> IO (Either String BlastResult)
 waitOrRetrieve status rid counter
@@ -103,10 +92,10 @@ waitOrRetrieve status rid counter
 
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String BlastResult)                               
+performQuery :: String -> String -> Maybe SeqData -> Maybe String -> Int -> IO (Either String BlastResult)                               
 performQuery program database querySequenceMaybe entrezQueryMaybe counter
   | isJust querySequenceMaybe = do 
-     rid <- startSession program database (fromJust querySequenceMaybe) entrezQueryMaybe
+     rid <- startSession program database (L8.unpack (unSD (fromJust querySequenceMaybe))) entrezQueryMaybe
      result <- checkSessionStatus rid counter
      return result
   | otherwise = do 
@@ -115,7 +104,7 @@ performQuery program database querySequenceMaybe entrezQueryMaybe counter
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
 -- The querySequence has to be provided, all other parameters are optional. It is possible to provide an ENTREZ query string
-blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String BlastResult)
+blastHTTP :: Maybe String -> Maybe String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)
 blastHTTP program database querySequence entrezQuery = do
   let counter = 1
   let defaultProgram = "blastn"

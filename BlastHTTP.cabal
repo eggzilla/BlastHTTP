@@ -30,7 +30,7 @@ library
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml
+  build-depends:       base >=4.5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml, biocore
   
   -- Directories containing source files.
   hs-source-dirs:      src
