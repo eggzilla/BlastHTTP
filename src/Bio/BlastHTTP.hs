@@ -46,6 +46,7 @@ getRID = atName "RID" >>>
   returnA -< rid_value
       
 -- send query and retrieve RID to track status of computation
+startSession :: String -> String -> String -> Maybe String -> IO String
 startSession program database querySequence entrezQuery = do
   requestXml <- withSocketsDo
 --    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ entrezQuery)
@@ -54,7 +55,7 @@ startSession program database querySequence entrezQuery = do
   rid <- CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   return rid
 
---sendEntrezQuery :: String -> String -> String -> Maybe String
+sendEntrezQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendEntrezQuery program database querySequence entrezQuery 
   | isJust entrezQuery = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ (fromJust entrezQuery))
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
@@ -73,7 +74,6 @@ retrieveResult rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
   let resultXMLString = (L8.unpack statusXml)
-  --print "Retrieved result"
   return resultXMLString
 
 -- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
@@ -82,7 +82,6 @@ checkSessionStatus rid counter = do
     let counter2 = counter + 1
     let counter2string = show counter2
     threadDelay 60000000
-    --print ("Check session status" ++ counter2string)
     status <- retrieveSessionStatus rid
     let readyString = "Status=READY"
     let failureString = "Status=FAILURE"
@@ -96,17 +95,16 @@ waitOrRetrieve :: Bool -> String -> Int -> IO String
 waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
-                               
-checkQuerySequencePresence program database querySequenceMaybe entrezQueryMaybe counter
-  | isJust querySequenceMaybe = performQuery program database (fromJust querySequenceMaybe) entrezQueryMaybe counter
+
+performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String String)                               
+performQuery program database querySequenceMaybe entrezQueryMaybe counter
+  | isJust querySequenceMaybe = do 
+     rid <- startSession program database (fromJust querySequenceMaybe) entrezQueryMaybe
+     result <- checkSessionStatus rid counter
+     return (Right result)
   | otherwise = do 
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
-
-performQuery program database querySequenceMaybe entrezQueryMaybe counter = do
-  rid <- startSession program database querySequenceMaybe entrezQueryMaybe
-  result <- checkSessionStatus rid counter
-  return (Right result)
 
 blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String String)
 blastHTTP programMaybe databaseMaybe querySequenceMaybe entrezQueryMaybe = do
@@ -115,11 +113,7 @@ blastHTTP programMaybe databaseMaybe querySequenceMaybe entrezQueryMaybe = do
   let defaultDatabase = "refseq_genomic"                  
   let program = fromMaybe defaultProgram programMaybe
   let database = fromMaybe defaultDatabase databaseMaybe  
-  result <- checkQuerySequencePresence program database querySequenceMaybe entrezQueryMaybe counter
-  -- send query and retrieve session id                 
-  --rid <- startSession program database querySequenceMaybe entrezQueryMaybe
-  --check if job is finished and retrieve results 
-  --result <- checkSessionStatus rid counter
+  result <- performQuery program database querySequenceMaybe entrezQueryMaybe counter
   return result
 
       
