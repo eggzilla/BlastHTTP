@@ -15,6 +15,7 @@ import Data.Conduit
 import qualified Data.ByteString.Lazy.Char8 as L8
 import Control.Monad.IO.Class (liftIO)    
 import qualified Control.Monad as CM
+import Bio.BlastXML 
 import Text.XML.HXT.Core
 import Network
 import qualified Data.Conduit.List as CL
@@ -60,15 +61,15 @@ retrieveSessionStatus rid = do
   return statusXMLString
 
 -- | Retrieve result in blastxml format with RID 
-retrieveResult :: String -> IO String 
+retrieveResult :: String -> IO BlastResult
 retrieveResult rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
-  let resultXMLString = (L8.unpack statusXml)
-  return resultXMLString
+  resultXML <- (readXMLString statusXml)
+  return resultXML
 
 -- | Check if job results are ready and then retrieves results
-checkSessionStatus :: String -> Int -> IO String
+checkSessionStatus :: String -> Int -> IO BlastResult
 checkSessionStatus rid counter = do
     let counter2 = counter + 1
     let counter2string = show counter2
@@ -83,14 +84,13 @@ checkSessionStatus rid counter = do
     return results
 
 -- | Checks if results are ready, checks again if not or retrieves results if yes
-waitOrRetrieve :: Bool -> String -> Int -> IO String
+waitOrRetrieve :: Bool -> String -> Int -> IO BlastResult
 waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
 
-
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String String)                               
+performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String BlastResult)                               
 performQuery program database querySequenceMaybe entrezQueryMaybe counter
   | isJust querySequenceMaybe = do 
      rid <- startSession program database (fromJust querySequenceMaybe) entrezQueryMaybe
@@ -102,7 +102,7 @@ performQuery program database querySequenceMaybe entrezQueryMaybe counter
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
 -- The querySequence has to be provided, all other parameters are optional. It is possible to provide an ENTREZ query string
-blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String String)
+blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String BlastResult)
 blastHTTP program database querySequence entrezQuery = do
   let counter = 1
   let defaultProgram = "blastn"
