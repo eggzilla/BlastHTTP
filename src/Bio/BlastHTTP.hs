@@ -61,15 +61,15 @@ retrieveSessionStatus rid = do
   return statusXMLString
 
 -- | Retrieve result in blastxml format with RID 
-retrieveResult :: String -> IO BlastResult
+retrieveResult :: String -> IO (Either String BlastResult)
 retrieveResult rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
   resultXML <- (readXMLString statusXml)
-  return resultXML
+  return (Right resultXML)
 
 -- | Check if job results are ready and then retrieves results
-checkSessionStatus :: String -> Int -> IO BlastResult
+checkSessionStatus :: String -> Int -> IO (Either String BlastResult)
 checkSessionStatus rid counter = do
     let counter2 = counter + 1
     let counter2string = show counter2
@@ -80,14 +80,27 @@ checkSessionStatus rid counter = do
     let expiredString = "Status=UNKNOWN"
     --CM.when (isInfixOf failureString status)(throwError "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n")
     --CM.when (isInfixOf expiredString status)(throwError "Search $rid expired.\n")
-    results <- waitOrRetrieve (isInfixOf readyString status) rid counter2
+--    results <- waitOrRetrieve (isInfixOf readyString status) rid counter2
+    results <- waitOrRetrieve status rid counter2
     return results
 
 -- | Checks if results are ready, checks again if not or retrieves results if yes
-waitOrRetrieve :: Bool -> String -> Int -> IO BlastResult
-waitOrRetrieve ready rid counter
-  | ready  = retrieveResult rid
+--waitOrRetrieve :: Bool -> String -> Int -> IO (Either String BlastResult)
+--waitOrRetrieve ready rid counter
+--  | ready  = retrieveResult rid
+--  | otherwise = checkSessionStatus rid counter
+
+waitOrRetrieve :: String -> String -> Int -> IO (Either String BlastResult)
+waitOrRetrieve status rid counter
+  | (isInfixOf "Status=READY" status) = retrieveResult rid
+  | (isInfixOf "Status=FAILURE" status) = do
+      let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
+      return (Left exceptionMessage)
+  | (isInfixOf "Status=UNKNOWN" status) = do
+      let exceptionMessage = "Search $rid expired.\n"
+      return (Left exceptionMessage)
   | otherwise = checkSessionStatus rid counter
+
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
 performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String BlastResult)                               
@@ -95,7 +108,7 @@ performQuery program database querySequenceMaybe entrezQueryMaybe counter
   | isJust querySequenceMaybe = do 
      rid <- startSession program database (fromJust querySequenceMaybe) entrezQueryMaybe
      result <- checkSessionStatus rid counter
-     return (Right result)
+     return result
   | otherwise = do 
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
