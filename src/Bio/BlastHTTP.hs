@@ -18,6 +18,7 @@ import Data.List
 import Control.Monad.Error as CM
 import Control.Concurrent
 import Data.Maybe
+import Data.Either
 
 -- | Parse XML results in XML format
 parseXML :: String -> IOStateArrow s b XmlTree              
@@ -78,7 +79,6 @@ retrieveResult rid = do
 -- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
 checkSessionStatus :: String -> Int -> IO String
 checkSessionStatus rid counter = do
---  runErrorT $ do
     let counter2 = counter + 1
     let counter2string = show counter2
     threadDelay 60000000
@@ -97,19 +97,29 @@ waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
                                
-blastHTTP :: Maybe String -> Maybe String -> String -> Maybe String -> IO String
+checkQuerySequencePresence program database querySequenceMaybe entrezQueryMaybe counter
+  | isJust querySequenceMaybe = performQuery program database (fromJust querySequenceMaybe) entrezQueryMaybe counter
+  | otherwise = do 
+     let exceptionMessage = "Error - no query sequence provided"
+     return (Left exceptionMessage)
+
+performQuery program database querySequenceMaybe entrezQueryMaybe counter = do
+  rid <- startSession program database querySequenceMaybe entrezQueryMaybe
+  result <- checkSessionStatus rid counter
+  return (Right result)
+
+blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String String)
 blastHTTP programMaybe databaseMaybe querySequenceMaybe entrezQueryMaybe = do
   let counter = 1
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"                  
   let program = fromMaybe defaultProgram programMaybe
   let database = fromMaybe defaultDatabase databaseMaybe  
-  -- query 
-  let counter = 1
+  result <- checkQuerySequencePresence program database querySequenceMaybe entrezQueryMaybe counter
   -- send query and retrieve session id                 
-  rid <- startSession program database querySequenceMaybe entrezQueryMaybe
+  --rid <- startSession program database querySequenceMaybe entrezQueryMaybe
   --check if job is finished and retrieve results 
-  result <- checkSessionStatus rid counter
+  --result <- checkSessionStatus rid counter
   return result
 
       
