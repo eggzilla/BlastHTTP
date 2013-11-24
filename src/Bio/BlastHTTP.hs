@@ -7,7 +7,8 @@
 -- For more information on BLAST refer to: http://blast.ncbi.nlm.nih.gov/Blast.cgi
 -- Information on the webservice can be found at: http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml
 module Bio.BlastHTTP (
-                       blastHTTP
+                       blastHTTP,
+                       BlastHTTPQuery
                      ) where
 
 import Network.HTTP.Conduit 
@@ -26,10 +27,16 @@ import Data.Maybe
 import Data.Either
 import Bio.Core.Sequence
 
+data BlastHTTPQuery = BlastHTTPQuery 
+  { program :: Maybe String
+  , database :: Maybe String
+  , querySequence :: Maybe SeqData
+  , entrezQuery :: Maybe String }
+  deriving (Show, Eq)
+
 -- | Parse HTML results into Xml Tree datastructure
 parseHTML :: String -> IOStateArrow s0 b0 XmlTree
-parseHTML html = readString [withParseHTML yes, withWarnings no] html       
-   
+parseHTML html = readString [withParseHTML yes, withWarnings no] html         
 -- | Gets all subtrees with the specified id attribute
 atName :: ArrowXml a => String -> a XmlTree XmlTree
 atName elementId = deep (isElem >>> hasAttrValue "name" (== elementId))
@@ -104,8 +111,9 @@ performQuery program database querySequenceMaybe entrezQueryMaybe counter
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
 -- The querySequence has to be provided, all other parameters are optional. It is possible to provide an ENTREZ query string
-blastHTTP :: Maybe String -> Maybe String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)
-blastHTTP program database querySequence entrezQuery = do
+--blastHTTP :: Maybe String -> Maybe String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)
+blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
+blastHTTP (BlastHTTPQuery program database querySequence entrezQuery) = do
   let counter = 1
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"                  
