@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Arrows #-}
 
--- | Blast REST service 
+-- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as String
+-- The function blastHTTP takes the arguments: program (blastn,blastp,..) database(refseq_genomic, nr,..) querySequence (String of nucleotide,
+-- protein characters, depending on the blast program used) and the optional entrezQuery string.
+-- For more information on BLAST refer to: http://blast.ncbi.nlm.nih.gov/Blast.cgi
+-- Information on the webservice can be found at: http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml
 module Bio.BlastHTTP (
                        blastHTTP
                      ) where
@@ -20,47 +24,34 @@ import Control.Concurrent
 import Data.Maybe
 import Data.Either
 
--- | Parse XML results in XML format
-parseXML :: String -> IOStateArrow s b XmlTree              
-parseXML = readDocument [ withValidate no
-                        , withRemoveWS yes  -- throw away formating WS
-                        ] 
-parseHTML html = readString [withParseHTML yes, withWarnings no] html          
--- | gets all subtrees with the specified tag name
-atTag :: ArrowXml a =>  String -> a XmlTree XmlTree
-atTag tag = deep (isElem >>> hasName tag)
-
--- | gets all subtrees with the specified id attribute
+-- | Parse HTML results into Xml Tree datastructure
+parseHTML :: String -> IOStateArrow s0 b0 XmlTree
+parseHTML html = readString [withParseHTML yes, withWarnings no] html       
+   
+-- | Gets all subtrees with the specified id attribute
 atName :: ArrowXml a => String -> a XmlTree XmlTree
 atName elementId = deep (isElem >>> hasAttrValue "name" (== elementId))
 
--- | gets all subtrees with the specified id attribute
+-- | Gets all subtrees with the specified id attribute
 atId :: ArrowXml a =>  String -> a XmlTree XmlTree
 atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
-
--- | gets the RID
-getRID :: ArrowXml a => a XmlTree String  
-getRID = atName "RID" >>> 
-  proc memeResult -> do
-  rid_value <- getAttrValue "value" -< memeResult
-  returnA -< rid_value
       
--- send query and retrieve RID to track status of computation
+-- | Send query and parse RID from retrieved HTML 
 startSession :: String -> String -> String -> Maybe String -> IO String
 startSession program database querySequence entrezQuery = do
   requestXml <- withSocketsDo
---    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ entrezQuery)
       $ sendEntrezQuery program database querySequence entrezQuery
   let requestXMLString = (L8.unpack requestXml)
   rid <- CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   return rid
 
+-- | Send query with or without Entrez query and return response HTML
 sendEntrezQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendEntrezQuery program database querySequence entrezQuery 
   | isJust entrezQuery = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ (fromJust entrezQuery))
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
          
--- retrieve session status
+-- | Retrieve session status with RID
 retrieveSessionStatus :: String -> IO String 
 retrieveSessionStatus rid = do
   statusXml <- withSocketsDo
@@ -68,7 +59,7 @@ retrieveSessionStatus rid = do
   let statusXMLString = (L8.unpack statusXml)
   return statusXMLString
 
--- retrieve result in blastxml format 
+-- | Retrieve result in blastxml format with RID 
 retrieveResult :: String -> IO String 
 retrieveResult rid = do
   statusXml <- withSocketsDo
@@ -76,7 +67,7 @@ retrieveResult rid = do
   let resultXMLString = (L8.unpack statusXml)
   return resultXMLString
 
--- Check if job is completed, if yes retrieve results, otherwise check again or return with an e rror message in case of failure
+-- | Check if job results are ready and then retrieves results
 checkSessionStatus :: String -> Int -> IO String
 checkSessionStatus rid counter = do
     let counter2 = counter + 1
@@ -91,11 +82,14 @@ checkSessionStatus rid counter = do
     results <- waitOrRetrieve (isInfixOf readyString status) rid counter2
     return results
 
+-- | Checks if results are ready, checks again if not or retrieves results if yes
 waitOrRetrieve :: Bool -> String -> Int -> IO String
 waitOrRetrieve ready rid counter
   | ready  = retrieveResult rid
   | otherwise = checkSessionStatus rid counter
 
+
+-- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
 performQuery :: String -> String -> Maybe String -> Maybe String -> Int -> IO (Either String String)                               
 performQuery program database querySequenceMaybe entrezQueryMaybe counter
   | isJust querySequenceMaybe = do 
@@ -106,14 +100,16 @@ performQuery program database querySequenceMaybe entrezQueryMaybe counter
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
 
+-- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
+-- The querySequence has to be provided, all other parameters are optional. It is possible to provide an ENTREZ query string
 blastHTTP :: Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String String)
-blastHTTP programMaybe databaseMaybe querySequenceMaybe entrezQueryMaybe = do
+blastHTTP program database querySequence entrezQuery = do
   let counter = 1
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"                  
-  let program = fromMaybe defaultProgram programMaybe
-  let database = fromMaybe defaultDatabase databaseMaybe  
-  result <- performQuery program database querySequenceMaybe entrezQueryMaybe counter
+  let selectedProgram = fromMaybe defaultProgram program
+  let selectedDatabase = fromMaybe defaultDatabase database  
+  result <- performQuery selectedProgram selectedDatabase querySequence entrezQuery counter
   return result
 
       
