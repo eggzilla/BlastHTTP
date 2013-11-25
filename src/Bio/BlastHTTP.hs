@@ -1,19 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Arrows #-}
 
--- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as String
+-- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as String.
+--
 -- The function blastHTTP takes the BlastHTTPQuery datatype as argument, which contains following elements: 
--- program (blastn,blastp,..) - Maybe String
--- database (refseq_genomic, nr,..) - Maybe String
--- querySequence (nucleotides or protein sequence, depending on the blast program used) - Maybe SeqData  
--- optional entrezQuery Maybe String
--- For more information on BLAST refer to: <http://blast.ncbi.nlm.nih.gov/Blast.cgi>
--- Information on the webservice can be found at: <http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml>
--- If you plan to submit more than 20 searches in one session, please look up the Usage Guidelines in the webservice information.
-module Bio.BlastHTTP (
-                       blastHTTP,
-                       BlastHTTPQuery
-                     ) where
+--
+-- 1. program:  Selects the blast-program to be used for the query. Example values are blastn, blastp, blastx,.. If Nothing is used as argument the function will default to blastn. Type: Maybe String
+--
+-- 2. database: Selects the database to be queried against. Example values are refseq_genomic, nr, est,.. Please consider that the database must be chosen in accordance with the blastprogram. Default value: refseq_genomic. Type: Maybe String
+--
+-- 3. querySequence: nucleotides or protein sequence, depending on the blast program used. If no sequence is provided an exception as String will be produced. Type: Maybe SeqData
+--
+-- 4. entrezQuery: This argument is optional and will filter the result if provided. Type: Maybe String
+--
+-- and returns Either a BlastResult (Right) on success or an exception as String (Left)
+--
+-- If you plan to submit more than 20 searches in one session, please look up the Usage Guidelines in the webservice information <http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml>.
+module Bio.BlastHTTP ( BlastHTTPQuery (..),
+                       blastHTTP) where
 
 import Network.HTTP.Conduit 
 import Data.Conduit    
