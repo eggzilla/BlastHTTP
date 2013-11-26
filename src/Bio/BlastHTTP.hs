@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as String.
+-- | Searches a provided sequence with the NCBI Blast REST service and returns a blast result in xml format as BlastResult.
 --
 -- The function blastHTTP takes the BlastHTTPQuery datatype as argument, which contains following elements: 
 --
