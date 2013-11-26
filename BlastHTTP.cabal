@@ -27,6 +27,15 @@ category:            Bioinformatics
 build-type:          Simple
 cabal-version:       >=1.8
 
+source-repository head
+  type:     git
+  location: https://github.com/eggzilla/BlastHTTP
+
+source-repository this
+  type:     darcs
+  location: https://github.com/eggzilla/BlastHTTP/tree/v0.0.1
+  tag:      v0.0.1
+
 library
   -- Modules exported by the library.
   exposed-modules:     Bio.BlastHTTP
@@ -35,7 +44,7 @@ library
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml, biocore
+  build-depends:       base >=4.5 && <5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml, biocore
   
   -- Directories containing source files.
   hs-source-dirs:      src
