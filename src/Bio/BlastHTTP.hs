@@ -79,7 +79,7 @@ retrieveResult :: String -> IO (Either String BlastResult)
 retrieveResult rid = do
   statusXml <- withSocketsDo
     $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
-  resultXML <- readXMLString statusXml
+  resultXML <- parseXML statusXml
   return (Right resultXML)
 
 -- | Check if job results are ready and then retrieves results
