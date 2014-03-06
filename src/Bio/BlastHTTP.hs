@@ -84,16 +84,14 @@ retrieveResult rid = do
   return (Right resultXML)
 
 -- | Check if job results are ready and then retrieves results
-checkSessionStatus :: String -> Int -> IO (Either String BlastResult)
-checkSessionStatus rid counter = do
-    let counter2 = counter + 1
-    let counter2string = show counter2
+checkSessionStatus :: String -> IO (Either String BlastResult)
+checkSessionStatus rid = do
     threadDelay 60000000
     status <- retrieveSessionStatus rid
-    waitOrRetrieve status rid counter2
+    waitOrRetrieve status rid 
 
-waitOrRetrieve :: String -> String -> Int -> IO (Either String BlastResult)
-waitOrRetrieve status rid counter
+waitOrRetrieve :: String -> String -> IO (Either String BlastResult)
+waitOrRetrieve status rid 
   | "Status=READY" `isInfixOf` status = retrieveResult rid
   | "Status=FAILURE" `isInfixOf` status = do
       let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
@@ -101,14 +99,14 @@ waitOrRetrieve status rid counter
   | "Status=UNKNOWN" `isInfixOf` status = do
       let exceptionMessage = "Search $rid expired.\n"
       return (Left exceptionMessage)
-  | otherwise = checkSessionStatus rid counter
+  | otherwise = checkSessionStatus rid
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> Maybe SeqData -> Maybe String -> Int -> IO (Either String BlastResult)                               
-performQuery program database querySequenceMaybe optionalArgumentMaybe counter
+performQuery :: String -> String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)                               
+performQuery program database querySequenceMaybe optionalArgumentMaybe
   | isJust querySequenceMaybe = do 
      rid <- startSession program database (L8.unpack (unSD (fromJust querySequenceMaybe))) optionalArgumentMaybe
-     checkSessionStatus rid counter
+     checkSessionStatus rid
   | otherwise = do 
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
@@ -118,12 +116,11 @@ performQuery program database querySequenceMaybe optionalArgumentMaybe counter
 -- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
 blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
 blastHTTP (BlastHTTPQuery program database querySequence optionalArguments) = do
-  let counter = 1
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"                  
   let selectedProgram = fromMaybe defaultProgram program
   let selectedDatabase = fromMaybe defaultDatabase database  
-  performQuery selectedProgram selectedDatabase querySequence entrezQuery optionalArguments
+  performQuery selectedProgram selectedDatabase querySequence optionalArguments
 
 
       

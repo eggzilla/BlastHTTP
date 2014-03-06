@@ -7,7 +7,7 @@ name:                BlastHTTP
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.0.0
+version:             1.0.1
 synopsis:            Libary to interface with the NCBI blast REST interface
 description:         Searches for a provided nucleotide or protein sequence with the NCBI Blast REST service and returns a blast result in xml format as BlastResult datatype. 
                      .
