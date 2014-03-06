@@ -38,7 +38,8 @@ data BlastHTTPQuery = BlastHTTPQuery
   { program :: Maybe String
   , database :: Maybe String
   , querySequence :: Maybe SeqData
-  , entrezQuery :: Maybe String }
+  , optionalArguments :: Maybe String 
+  }
   deriving (Show, Eq)
 
 -- | Parse HTML results into Xml Tree datastructure
@@ -54,16 +55,16 @@ atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
       
 -- | Send query and parse RID from retrieved HTML 
 startSession :: String -> String -> String -> Maybe String -> IO String
-startSession program database querySequence entrezQuery = do
+startSession program database querySequence optionalArguments = do
   requestXml <- withSocketsDo
-      $ sendEntrezQuery program database querySequence entrezQuery
+      $ sendEntrezQuery program database querySequence optionalArguments
   let requestXMLString = L8.unpack requestXml
   CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   
--- | Send query with or without Entrez query and return response HTML
+-- | Send query with or without optional arguments and return response HTML
 sendEntrezQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendEntrezQuery program database querySequence entrezQuery 
-  | isJust entrezQuery = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ "&ENTREZ_QUERY=" ++ fromJust entrezQuery)
+sendEntrezQuery program database querySequence optionalArguments
+  | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ (fromJust optionalArguments))
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
          
 -- | Retrieve session status with RID
