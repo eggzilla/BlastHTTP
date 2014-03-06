@@ -57,14 +57,14 @@ atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
 startSession :: String -> String -> String -> Maybe String -> IO String
 startSession program database querySequence optionalArguments = do
   requestXml <- withSocketsDo
-      $ sendEntrezQuery program database querySequence optionalArguments
+      $ sendQuery program database querySequence optionalArguments
   let requestXMLString = L8.unpack requestXml
   CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
   
 -- | Send query with or without optional arguments and return response HTML
-sendEntrezQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendEntrezQuery program database querySequence optionalArguments
-  | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence ++ (fromJust optionalArguments))
+sendQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
+sendQuery program database querySequence optionalArguments
+  | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ (fromJust optionalArguments) ++ "&QUERY=" ++ querySequence)
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
          
 -- | Retrieve session status with RID
@@ -103,28 +103,27 @@ waitOrRetrieve status rid counter
       return (Left exceptionMessage)
   | otherwise = checkSessionStatus rid counter
 
-
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
 performQuery :: String -> String -> Maybe SeqData -> Maybe String -> Int -> IO (Either String BlastResult)                               
-performQuery program database querySequenceMaybe entrezQueryMaybe counter
+performQuery program database querySequenceMaybe optionalArgumentMaybe counter
   | isJust querySequenceMaybe = do 
-     rid <- startSession program database (L8.unpack (unSD (fromJust querySequenceMaybe))) entrezQueryMaybe
+     rid <- startSession program database (L8.unpack (unSD (fromJust querySequenceMaybe))) optionalArgumentMaybe
      checkSessionStatus rid counter
   | otherwise = do 
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
--- The querySequence has to be provided, all other parameters are optional. It is possible to provide an ENTREZ query string
---blastHTTP :: Maybe String -> Maybe String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)
+-- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
+-- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
 blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
-blastHTTP (BlastHTTPQuery program database querySequence entrezQuery) = do
+blastHTTP (BlastHTTPQuery program database querySequence optionalArguments) = do
   let counter = 1
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"                  
   let selectedProgram = fromMaybe defaultProgram program
   let selectedDatabase = fromMaybe defaultDatabase database  
-  performQuery selectedProgram selectedDatabase querySequence entrezQuery counter
+  performQuery selectedProgram selectedDatabase querySequence entrezQuery optionalArguments
 
 
       
