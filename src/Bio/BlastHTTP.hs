@@ -64,7 +64,7 @@ startSession program database querySequence optionalArguments = do
 -- | Send query with or without optional arguments and return response HTML
 sendQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendQuery program database querySequence optionalArguments
-  | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ (fromJust optionalArguments) ++ "&QUERY=" ++ querySequence)
+  | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ fromJust optionalArguments ++ "&QUERY=" ++ querySequence)
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
          
 -- | Retrieve session status with RID
