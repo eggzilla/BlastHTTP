@@ -28,7 +28,7 @@ import Text.XML.HXT.Core
 import Network
 import qualified Data.Conduit.List as CL
 import Data.List
-import Control.Monad.Error as CM
+import Control.Monad.Except as CM
 import Control.Concurrent
 import Data.Maybe
 import Data.Either
