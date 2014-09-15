@@ -35,7 +35,8 @@ import Data.Either
 import Bio.Core.Sequence
 
 data BlastHTTPQuery = BlastHTTPQuery 
-  { program :: Maybe String
+  { provider :: Maybe String
+  , program :: Maybe String
   , database :: Maybe String
   , querySequence :: Maybe SeqData
   , optionalArguments :: Maybe String 
@@ -54,59 +55,96 @@ atId :: ArrowXml a =>  String -> a XmlTree XmlTree
 atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
       
 -- | Send query and parse RID from retrieved HTML 
-startSession :: String -> String -> String -> Maybe String -> IO String
-startSession program database querySequence optionalArguments = do
+startSession :: String -> String -> String -> String -> Maybe String -> IO String
+startSession provider program database querySequence optionalArguments = do
   requestXml <- withSocketsDo
-      $ sendQuery program database querySequence optionalArguments
+      $ sendQuery provider program database querySequence optionalArguments
   let requestXMLString = L8.unpack requestXml
   CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
+
+sendQuery :: String -> String -> String -> String -> Maybe String -> IO L8.ByteString
+sendQuery provider program database querySequence optionalArguments
+  | provider == "ebi" = sendQueryEBI program database querySequence optionalArguments
+  | otherwise = sendQueryNCBI program database querySequence optionalArguments
+
+-- | Send query with or without optional arguments and return response HTML
+sendQueryEBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
+sendQueryEBI program database querySequence optionalArguments
+  | isJust optionalArguments = simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast?" ++ program ++ "&DATABASE=" ++ database ++ fromJust optionalArguments ++ "&QUERY=" ++ querySequence)
+  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
   
 -- | Send query with or without optional arguments and return response HTML
-sendQuery :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQuery program database querySequence optionalArguments
+sendQueryNCBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
+sendQueryNCBI program database querySequence optionalArguments
   | isJust optionalArguments = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ fromJust optionalArguments ++ "&QUERY=" ++ querySequence)
   | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
          
 -- | Retrieve session status with RID
-retrieveSessionStatus :: String -> IO String 
-retrieveSessionStatus rid = do
-  statusXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
-  let statusXMLString = L8.unpack statusXml
-  return statusXMLString
+retrieveSessionStatus :: String -> String -> IO String 
+retrieveSessionStatus provider rid = do
+  if provider == "ebi"
+     then do
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast")
+       let statusXMLString = L8.unpack statusXml
+       return statusXMLString
+     else do
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
+       let statusXMLString = L8.unpack statusXml
+       return statusXMLString
   
 -- | Retrieve result in blastxml format with RID 
-retrieveResult :: String -> IO (Either String BlastResult)
-retrieveResult rid = do
-  statusXml <- withSocketsDo
-    $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
-  resultXML <- parseXML statusXml
-  return (Right resultXML)
-
+retrieveResult :: String -> String -> IO (Either String BlastResult)
+retrieveResult provider rid = do
+  if provider == "ebi"
+     then do
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
+       resultXML <- parseXML statusXml
+       return (Right resultXML)
+     else do
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
+       resultXML <- parseXML statusXml
+       return (Right resultXML)
+ 
 -- | Check if job results are ready and then retrieves results
-checkSessionStatus :: String -> IO (Either String BlastResult)
-checkSessionStatus rid = do
+checkSessionStatus :: String -> String -> IO (Either String BlastResult)
+checkSessionStatus provider rid = do
     threadDelay 60000000
-    status <- retrieveSessionStatus rid
-    waitOrRetrieve status rid 
+    status <- retrieveSessionStatus provider rid
+    waitOrRetrieve provider status rid 
 
-waitOrRetrieve :: String -> String -> IO (Either String BlastResult)
-waitOrRetrieve status rid 
-  | "Status=READY" `isInfixOf` status = retrieveResult rid
+waitOrRetrieve :: String -> String -> String -> IO (Either String BlastResult)
+waitOrRetrieve provider status rid 
+  | provider == "ebi" = waitOrRetrieveEBI status rid 
+  | otherwise = waitOrRetrieveNCBI status rid 
+
+waitOrRetrieveEBI :: String -> String -> IO (Either String BlastResult)
+waitOrRetrieveEBI status rid 
+  | "Status=READY" `isInfixOf` status = retrieveResult "ebi" rid
   | "Status=FAILURE" `isInfixOf` status = do
       let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
       return (Left exceptionMessage)
   | "Status=UNKNOWN" `isInfixOf` status = do
       let exceptionMessage = "Search $rid expired.\n"
       return (Left exceptionMessage)
-  | otherwise = checkSessionStatus rid
+  | otherwise = checkSessionStatus "ebi" rid
+
+waitOrRetrieveNCBI :: String -> String -> IO (Either String BlastResult)
+waitOrRetrieveNCBI status rid 
+  | "Status=READY" `isInfixOf` status = retrieveResult "ncbi" rid
+  | "Status=FAILURE" `isInfixOf` status = do
+      let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
+      return (Left exceptionMessage)
+  | "Status=UNKNOWN" `isInfixOf` status = do
+      let exceptionMessage = "Search $rid expired.\n"
+      return (Left exceptionMessage)
+  | otherwise = checkSessionStatus "ncbi" rid
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)                               
-performQuery program database querySequenceMaybe optionalArgumentMaybe
+performQuery :: String -> String -> String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)                               
+performQuery provider program database querySequenceMaybe optionalArgumentMaybe
   | isJust querySequenceMaybe = do 
-     rid <- startSession program database (L8.unpack (unSD (fromJust querySequenceMaybe))) optionalArgumentMaybe
-     checkSessionStatus rid
+     rid <- startSession provider program database (L8.unpack (unSD (fromJust querySequenceMaybe))) optionalArgumentMaybe
+     checkSessionStatus provider rid
   | otherwise = do 
      let exceptionMessage = "Error - no query sequence provided"
      return (Left exceptionMessage)
@@ -115,12 +153,14 @@ performQuery program database querySequenceMaybe optionalArgumentMaybe
 -- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
 -- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
 blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
-blastHTTP (BlastHTTPQuery program database querySequence optionalArguments) = do
+blastHTTP (BlastHTTPQuery provider program database querySequence optionalArguments) = do
+  let defaultProvider = "ncbi"
   let defaultProgram = "blastn"
-  let defaultDatabase = "refseq_genomic"                  
+  let defaultDatabase = "refseq_genomic"   
+  let selectedProvider = fromMaybe defaultProvider provider
   let selectedProgram = fromMaybe defaultProgram program
   let selectedDatabase = fromMaybe defaultDatabase database  
-  performQuery selectedProgram selectedDatabase querySequence optionalArguments
+  performQuery selectedProvider selectedProgram selectedDatabase querySequence optionalArguments
 
 
       
