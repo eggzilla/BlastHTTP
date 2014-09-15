@@ -69,9 +69,33 @@ sendQuery provider program database querySequence optionalArguments
 
 -- | Send query with or without optional arguments and return response HTML
 sendQueryEBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQueryEBI program database querySequence optionalArguments
-  | isJust optionalArguments = simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast?" ++ program ++ "&DATABASE=" ++ database ++ fromJust optionalArguments ++ "&QUERY=" ++ querySequence)
-  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program ++ "&DATABASE=" ++ database ++ "&QUERY=" ++ querySequence)
+sendQueryEBI program database querySequence optionalArguments = do
+  putStrLn "Making HTTP request"
+  res <- do
+    initReq <- parseUrl "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run/"
+    let req = (flip urlEncodedBody) initReq $
+             [ ("email", "florian.eggenhofer@univie.ac.at")
+             , ("program", "blastn")
+             , ("database", "em_rel_mam")
+             , ("stype", "dna")
+             , ("sequence",  "AGAGAGAGGA")
+             ]
+    withManager $ httpLbs req
+        { method = "POST" }
+  return (responseBody res)  
+  --print res
+  --runResourceT $ do
+  --  manager <- liftIO $ newManager conduitManagerSettings
+  --  req <- liftIO $ parseUrl "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run/"
+  --  let req2 = req
+  --              { method = "POST"
+  --              , redirectCount = 0
+  --              , checkStatus = \_ _ _ -> Nothing
+  --              }
+  --  res <- http req2 manager
+  --  responseBody res2 $$+- sinkFile "post-foo.txt"
+
+  
   
 -- | Send query with or without optional arguments and return response HTML
 sendQueryNCBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
