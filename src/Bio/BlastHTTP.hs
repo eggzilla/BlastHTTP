@@ -46,6 +46,7 @@ data BlastHTTPQuery = BlastHTTPQuery
 -- | Parse HTML results into Xml Tree datastructure
 parseHTML :: String -> IOStateArrow s0 b0 XmlTree
 parseHTML = readString [withParseHTML yes, withWarnings no] 
+
 -- | Gets all subtrees with the specified id attribute
 atName :: ArrowXml a => String -> a XmlTree XmlTree
 atName elementId = deep (isElem >>> hasAttrValue "name" (== elementId))
@@ -56,23 +57,32 @@ atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
       
 -- | Send query and parse RID from retrieved HTML 
 startSession :: String -> String -> String -> String -> Maybe String -> IO String
-startSession provider program database querySequence optionalArguments = do
+startSession provider program database querySequence optionalArguments 
+  | provider == "ebi" = startSessionEBI program database querySequence optionalArguments
+  | otherwise = startSessionNCBI program database querySequence optionalArguments
+
+startSessionEBI :: String -> String -> String -> Maybe String -> IO String
+startSessionEBI  program database querySequence optionalArguments = do
   requestXml <- withSocketsDo
-      $ sendQuery provider program database querySequence optionalArguments
+      $ sendQueryEBI program database querySequence optionalArguments
+  let requestID = L8.unpack requestXml
+  print "EBI - extracted request ID"
+  return requestID
+
+startSessionNCBI :: String -> String -> String -> Maybe String -> IO String
+startSessionNCBI program database querySequence optionalArguments = do
+  requestXml <- withSocketsDo
+      $ sendQueryNCBI program database querySequence optionalArguments
   let requestXMLString = L8.unpack requestXml
   CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
-
-sendQuery :: String -> String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQuery provider program database querySequence optionalArguments
-  | provider == "ebi" = sendQueryEBI program database querySequence optionalArguments
-  | otherwise = sendQueryNCBI program database querySequence optionalArguments
 
 -- | Send query with or without optional arguments and return response HTML
 sendQueryEBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendQueryEBI program database querySequence optionalArguments = do
   putStrLn "Making HTTP request"
   res <- do
-    initReq <- parseUrl "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run/"
+    --initReq <- parseUrl "http://postcatcher.in/catchers/541811052cb53502000001a7"
+    initReq <- parseUrl "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run"
     let req = (flip urlEncodedBody) initReq $
              [ ("email", "florian.eggenhofer@univie.ac.at")
              , ("program", "blastn")
@@ -82,7 +92,12 @@ sendQueryEBI program database querySequence optionalArguments = do
              ]
     withManager $ httpLbs req
         { method = "POST" }
-  return (responseBody res)  
+  putStrLn "EBI Response"
+  print res
+  putStrLn "EBI Response Body"
+  print (responseBody res)
+  return (responseBody res) 
+   
   --print res
   --runResourceT $ do
   --  manager <- liftIO $ newManager conduitManagerSettings
@@ -95,8 +110,6 @@ sendQueryEBI program database querySequence optionalArguments = do
   --  res <- http req2 manager
   --  responseBody res2 $$+- sinkFile "post-foo.txt"
 
-  
-  
 -- | Send query with or without optional arguments and return response HTML
 sendQueryNCBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendQueryNCBI program database querySequence optionalArguments
@@ -108,8 +121,10 @@ retrieveSessionStatus :: String -> String -> IO String
 retrieveSessionStatus provider rid = do
   if provider == "ebi"
      then do
-       statusXml <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast")
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/status/" ++ rid)
        let statusXMLString = L8.unpack statusXml
+       putStrLn "EBI statusXMLString"
+       print statusXMLString
        return statusXMLString
      else do
        statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
@@ -121,7 +136,7 @@ retrieveResult :: String -> String -> IO (Either String BlastResult)
 retrieveResult provider rid = do
   if provider == "ebi"
      then do
-       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
+       statusXml <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/result/" ++ rid ++ "/xml")
        resultXML <- parseXML statusXml
        return (Right resultXML)
      else do
