@@ -1,4 +1,4 @@
-BlastHTTP
+BlastHTTP  [![Build Status](https://travis-ci.org/eggzilla/BlastHTTP.svg?branch=master)](https://travis-ci.org/eggzilla/BlastHTTP)
 =========
 
 Haskell cabal libary for submission and result retrieval from the NCBI Blast REST webservice
