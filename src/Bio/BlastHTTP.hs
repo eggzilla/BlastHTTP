@@ -88,7 +88,7 @@ sendQueryEBI program database querySequence optionalArguments = do
              , ("program", "blastn")
              , ("database", "em_rel_mam")
              , ("stype", "dna")
-             , ("sequence",  "AGAGAGAGGA")
+             , ("sequence",  "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
              ]
     withManager $ httpLbs req
         { method = "POST" }
@@ -158,13 +158,17 @@ waitOrRetrieve provider status rid
 
 waitOrRetrieveEBI :: String -> String -> IO (Either String BlastResult)
 waitOrRetrieveEBI status rid 
-  | "Status=READY" `isInfixOf` status = retrieveResult "ebi" rid
-  | "Status=FAILURE" `isInfixOf` status = do
-      let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
+  | "FINISHED" `isInfixOf` status = retrieveResult "ebi" rid
+  | "FAILURE" `isInfixOf` status = do
+      let exceptionMessage = "BLASTHTTP: The EBI blast job failed."
       return (Left exceptionMessage)
-  | "Status=UNKNOWN" `isInfixOf` status = do
-      let exceptionMessage = "Search $rid expired.\n"
+  | "ERROR" `isInfixOf` status = do
+      let exceptionMessage = "BLASTHTTP: An error occurred attempting to get the EBI blast job status."
       return (Left exceptionMessage)
+  | "NOT_FOUND" `isInfixOf` status = do
+      let exceptionMessage = "BLASTHTTP: The EBI blast job cannot be found."
+      return (Left exceptionMessage)
+-- RUNNING
   | otherwise = checkSessionStatus "ebi" rid
 
 waitOrRetrieveNCBI :: String -> String -> IO (Either String BlastResult)

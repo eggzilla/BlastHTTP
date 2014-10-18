@@ -45,6 +45,6 @@ library
   
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.5 && <5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml, biocore
-  
+  ghc-options:         -Wall -O2
   -- Directories containing source files.
   hs-source-dirs:      src
