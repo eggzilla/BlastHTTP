@@ -29,12 +29,13 @@ import Data.List
 import Control.Concurrent
 import Data.Maybe
 import Bio.Core.Sequence
+import Bio.Sequence.Fasta
 
 data BlastHTTPQuery = BlastHTTPQuery 
   { provider :: Maybe String
   , program :: Maybe String
   , database :: Maybe String
-  , querySequence :: Maybe SeqData
+  , querySequences :: [Sequence]
   , optionalArguments :: Maybe String 
   }
   deriving (Show, Eq)
@@ -49,28 +50,28 @@ atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
       
 -- | Send query and parse RID from retrieved HTML 
 startSession :: String -> String -> String -> String -> Maybe String -> IO String
-startSession provider' program' database' querySequence' optionalArguments' 
-  | provider' == "ebi" = startSessionEBI program' database' querySequence' optionalArguments'
-  | otherwise = startSessionNCBI program' database' querySequence' optionalArguments'
+startSession provider' program' database' querySequences' optionalArguments' 
+  | provider' == "ebi" = startSessionEBI program' database' querySequences' optionalArguments'
+  | otherwise = startSessionNCBI program' database' querySequences' optionalArguments'
 
 startSessionEBI :: String -> String -> String -> Maybe String -> IO String
-startSessionEBI  program' database' querySequence' optionalArguments' = do
+startSessionEBI  program' database' querySequences' optionalArguments' = do
   requestXml <- withSocketsDo
-      $ sendQueryEBI program' database' querySequence' optionalArguments'
+      $ sendQueryEBI program' database' querySequences' optionalArguments'
   let requestID = L8.unpack requestXml
   --print "EBI - extracted request ID"
   return requestID
 
 startSessionNCBI :: String -> String -> String -> Maybe String -> IO String
-startSessionNCBI program' database' querySequence' optionalArguments' = do
+startSessionNCBI program' database' querySequences' optionalArguments' = do
   requestXml <- withSocketsDo
-      $ sendQueryNCBI program' database' querySequence' optionalArguments'
+      $ sendQueryNCBI program' database' querySequences' optionalArguments'
   let requestXMLString = L8.unpack requestXml
   CM.liftM head (runX $ parseHTML requestXMLString //> atId "rid" >>> getAttrValue "value")
 
 -- | Send query with or without optional arguments and return response HTML
 sendQueryEBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQueryEBI program' database' querySequence' optionalArguments' = do
+sendQueryEBI program' database' querySequences' optionalArguments' = do
   putStrLn "Making HTTP request"
   res <- do
     --initReq <- parseUrl "http://postcatcher.in/catchers/541811052cb53502000001a7"
@@ -80,7 +81,7 @@ sendQueryEBI program' database' querySequence' optionalArguments' = do
              , ("program", (B.pack program'))
              , ("database", (B.pack database'))
              , ("stype", "dna")
-             , ("sequence", (B.pack querySequence'))
+             , ("sequence", (B.pack querySequences'))
              ]
     withManager $ httpLbs req
         { method = "POST" }
@@ -89,24 +90,12 @@ sendQueryEBI program' database' querySequence' optionalArguments' = do
   putStrLn "EBI Response Body"
   print (responseBody res)
   return (responseBody res) 
-   
-  --print res
-  --runResourceT $ do
-  --  manager <- liftIO $ newManager conduitManagerSettings
-  --  req <- liftIO $ parseUrl "http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/run/"
-  --  let req2 = req
-  --              { method = "POST"
-  --              , redirectCount = 0
-  --              , checkStatus = \_ _ _ -> Nothing
-  --              }
-  --  res <- http req2 manager
-  --  responseBody res2 $$+- sinkFile "post-foo.txt"
 
 -- | Send query with or without optional arguments and return response HTML
 sendQueryNCBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQueryNCBI program' database' querySequence' optionalArguments'
-  | isJust optionalArguments' = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ fromJust optionalArguments' ++ "&QUERY=" ++ querySequence')
-  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ "&QUERY=" ++ querySequence')
+sendQueryNCBI program' database' querySequences' optionalArguments'
+  | isJust optionalArguments' = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ fromJust optionalArguments' ++ "&QUERY=" ++ querySequences')
+  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ "&QUERY=" ++ querySequences')
          
 -- | Retrieve session status with RID
 retrieveSessionStatus :: String -> String -> IO String 
@@ -175,27 +164,29 @@ waitOrRetrieveNCBI status rid
   | otherwise = checkSessionStatus "ncbi" rid
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> String -> Maybe SeqData -> Maybe String -> IO (Either String BlastResult)                               
-performQuery provider' program' database' querySequenceMaybe optionalArgumentMaybe
-  | isJust querySequenceMaybe = do 
-     rid <- startSession provider' program' database' (L8.unpack (unSD (fromJust querySequenceMaybe))) optionalArgumentMaybe
+performQuery :: String -> String -> String -> [Sequence] -> Maybe String -> IO (Either String BlastResult)                               
+performQuery provider' program' database' querySequences' optionalArgumentMaybe
+  | null querySequences' = do 
+      let exceptionMessage = "Error - no query sequence provided"
+      return (Left exceptionMessage)
+  | otherwise = do
+     rid <- startSession provider' program' database' (concatMap unpackSeqData querySequences') optionalArgumentMaybe
      checkSessionStatus provider' rid
-  | otherwise = do 
-     let exceptionMessage = "Error - no query sequence provided"
-     return (Left exceptionMessage)
+
+-- | unpack SeqData from Sequence
+unpackSeqData :: Sequence -> String
+unpackSeqData inputSequence = L8.unpack (unSD (seqdata inputSequence))
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
 -- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
 -- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
 blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
-blastHTTP (BlastHTTPQuery provider' program' database' querySequence' optionalArguments') = do
+blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalArguments') = do
   let defaultProvider = "ncbi"
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"   
   let selectedProvider = fromMaybe defaultProvider provider'
   let selectedProgram = fromMaybe defaultProgram program'
   let selectedDatabase = fromMaybe defaultDatabase database'  
-  performQuery selectedProvider selectedProgram selectedDatabase querySequence' optionalArguments'
+  performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments'
 
-
-      
