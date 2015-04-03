@@ -173,7 +173,6 @@ performQuery provider' program' database' querySequences' optionalArgumentMaybe
   | otherwise = do
      let sequenceString = urlEncode (concatMap showSequenceString querySequences')
      rid <- startSession provider' program' database' sequenceString optionalArgumentMaybe
-     putStrLn ("sequenceString" ++  sequenceString)
      checkSessionStatus provider' rid
 
 showSequenceString :: Sequence -> String
@@ -181,10 +180,6 @@ showSequenceString fastaSequence = sequenceString
   where sequenceHeader = ">" ++ L8.unpack (unSL (seqheader fastaSequence)) ++ "\n"
         sequenceData = L8.unpack (unSD (seqdata fastaSequence)) ++ "\n"
         sequenceString = sequenceHeader ++ sequenceData
-
--- | unpack SeqData from Sequence
-unpackSeqData :: Sequence -> String
-unpackSeqData inputSequence = L8.unpack (unSD (seqdata inputSequence))
 
 -- | Retrieve Blast results in BlastXML format from the NCBI REST Blast interface
 -- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
