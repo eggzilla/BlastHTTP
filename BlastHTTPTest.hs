@@ -16,6 +16,7 @@ import Data.Either.Unwrap
 import Bio.Core.Sequence
 import Bio.BlastHTTP
 import Bio.Sequence.Fasta
+import qualified Data.ByteString.Lazy.Char8 as L8
     
 main = do
   args <- getArgs

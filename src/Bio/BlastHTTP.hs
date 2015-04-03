@@ -30,6 +30,7 @@ import Control.Concurrent
 import Data.Maybe
 import Bio.Core.Sequence
 import Bio.Sequence.Fasta
+import Network.HTTP.Base
 
 data BlastHTTPQuery = BlastHTTPQuery 
   { provider :: Maybe String
@@ -170,8 +171,16 @@ performQuery provider' program' database' querySequences' optionalArgumentMaybe
       let exceptionMessage = "Error - no query sequence provided"
       return (Left exceptionMessage)
   | otherwise = do
-     rid <- startSession provider' program' database' (concatMap unpackSeqData querySequences') optionalArgumentMaybe
+     let sequenceString = urlEncode (concatMap showSequenceString querySequences')
+     rid <- startSession provider' program' database' sequenceString optionalArgumentMaybe
+     putStrLn ("sequenceString" ++  sequenceString)
      checkSessionStatus provider' rid
+
+showSequenceString :: Sequence -> String
+showSequenceString fastaSequence = sequenceString
+  where sequenceHeader = ">" ++ L8.unpack (unSL (seqheader fastaSequence)) ++ "\n"
+        sequenceData = L8.unpack (unSD (seqdata fastaSequence)) ++ "\n"
+        sequenceString = sequenceHeader ++ sequenceData
 
 -- | unpack SeqData from Sequence
 unpackSeqData :: Sequence -> String
