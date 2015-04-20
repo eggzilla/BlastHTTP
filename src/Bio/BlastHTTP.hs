@@ -8,9 +8,11 @@
 --
 -- 2. database: Selects the database to be queried against. Example values are refseq_genomic, nr, est,.. Please consider that the database must be chosen in accordance with the blastprogram. Default value: refseq_genomic. Type: Maybe String
 --
--- 3. querySequence: nucleotides or protein sequence, depending on the blast program used. If no sequence is provided an exception as String will be produced. Type: Maybe SeqData
+-- 3. querySequences: nucleotides or protein sequences, depending on the blast program used. If no sequence is provided an exception as String will be produced. Type: [Sequence]
 --
--- 4. entrezQuery: This argument is optional and will filter the result if provided. Type: Maybe String
+-- 4. optionalArguments: This argument is optional and will filter the result if provided. Type: Maybe String
+--
+-- 5. optionalWalltime: Optional walltime in mircroseconds. If specified, will terminate the query after reaching the timelimit and return Left. Type: Maybe Int
 --
 -- and returns Either a BlastResult (Right) on success or an exception as String (Left)
 --
@@ -37,7 +39,8 @@ data BlastHTTPQuery = BlastHTTPQuery
   , program :: Maybe String
   , database :: Maybe String
   , querySequences :: [Sequence]
-  , optionalArguments :: Maybe String 
+  , optionalArguments :: Maybe String
+  , optionalWalltime :: Maybe Int
   }
   deriving (Show, Eq)
 
@@ -51,16 +54,15 @@ atId elementId = deep (isElem >>> hasAttrValue "id" (== elementId))
       
 -- | Send query and parse RID from retrieved HTML 
 startSession :: String -> String -> String -> String -> Maybe String -> IO String
-startSession provider' program' database' querySequences' optionalArguments' 
-  | provider' == "ebi" = startSessionEBI program' database' querySequences' optionalArguments'
-  | otherwise = startSessionNCBI program' database' querySequences' optionalArguments'
+startSession provider' program' database' querySequences' optionalArguments'
+  | provider' == "ebi" = startSessionEBI program' database' querySequences' optionalArguments' 
+  | otherwise = startSessionNCBI program' database' querySequences' optionalArguments' 
 
 startSessionEBI :: String -> String -> String -> Maybe String -> IO String
 startSessionEBI  program' database' querySequences' optionalArguments' = do
   requestXml <- withSocketsDo
       $ sendQueryEBI program' database' querySequences' optionalArguments'
   let requestID = L8.unpack requestXml
-  --print "EBI - extracted request ID"
   return requestID
 
 startSessionNCBI :: String -> String -> String -> Maybe String -> IO String
@@ -72,7 +74,7 @@ startSessionNCBI program' database' querySequences' optionalArguments' = do
 
 -- | Send query with or without optional arguments and return response HTML
 sendQueryEBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
-sendQueryEBI program' database' querySequences' optionalArguments' = do
+sendQueryEBI program' database' querySequences' _ = do
   putStrLn "Making HTTP request"
   res <- do
     --initReq <- parseUrl "http://postcatcher.in/catchers/541811052cb53502000001a7"
@@ -106,7 +108,6 @@ retrieveSessionStatus provider' rid = do
        statusXml <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/status/" ++ rid)
        let statusXMLString = L8.unpack statusXml
        putStrLn "EBI statusXMLString"
-       print statusXMLString
        return statusXMLString
      else do
        statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
@@ -127,19 +128,29 @@ retrieveResult provider' rid = do
        return (Right resultXML)
  
 -- | Check if job results are ready and then retrieves results
-checkSessionStatus :: String -> String -> IO (Either String BlastResult)
-checkSessionStatus provider' rid = do
+--   If a walltime in microseconds was set query retrieval will termiate after it is consumed and return a Left result
+checkSessionStatus :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+checkSessionStatus provider' rid walltime consumedTime = do
     threadDelay 120000000
     status <- retrieveSessionStatus provider' rid
-    waitOrRetrieve provider' status rid 
+    if (isNothing walltime)
+       then do
+         waitOrRetrieve provider' status rid walltime consumedTime
+       else do
+         if (consumedTime < (fromJust walltime))
+           then do 
+             waitOrRetrieve provider' status rid walltime (consumedTime + 120000000)
+           else do 
+             let exceptionMessage = "BLASTHTTP: Query did not return result within walltime"
+             return (Left exceptionMessage)
 
-waitOrRetrieve :: String -> String -> String -> IO (Either String BlastResult)
-waitOrRetrieve provider' status rid 
-  | provider' == "ebi" = waitOrRetrieveEBI status rid 
-  | otherwise = waitOrRetrieveNCBI status rid 
+waitOrRetrieve :: String -> String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieve provider' status rid walltime consumedTime
+  | provider' == "ebi" = waitOrRetrieveEBI status rid walltime consumedTime
+  | otherwise = waitOrRetrieveNCBI status rid walltime consumedTime
 
-waitOrRetrieveEBI :: String -> String -> IO (Either String BlastResult)
-waitOrRetrieveEBI status rid 
+waitOrRetrieveEBI :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieveEBI status rid walltime consumedTime
   | "FINISHED" `isInfixOf` status = retrieveResult "ebi" rid
   | "FAILURE" `isInfixOf` status = do
       let exceptionMessage = "BLASTHTTP: The EBI blast job failed."
@@ -151,10 +162,10 @@ waitOrRetrieveEBI status rid
       let exceptionMessage = "BLASTHTTP: The EBI blast job cannot be found."
       return (Left exceptionMessage)
 -- RUNNING
-  | otherwise = checkSessionStatus "ebi" rid
+  | otherwise = checkSessionStatus "ebi" rid walltime consumedTime
 
-waitOrRetrieveNCBI :: String -> String -> IO (Either String BlastResult)
-waitOrRetrieveNCBI status rid 
+waitOrRetrieveNCBI :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieveNCBI status rid walltime consumedTime
   | "Status=READY" `isInfixOf` status = retrieveResult "ncbi" rid
   | "Status=FAILURE" `isInfixOf` status = do
       let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
@@ -162,18 +173,23 @@ waitOrRetrieveNCBI status rid
   | "Status=UNKNOWN" `isInfixOf` status = do
       let exceptionMessage = "Search $rid expired.\n"
       return (Left exceptionMessage)
-  | otherwise = checkSessionStatus "ncbi" rid
+  | "Status=WAITING" `isInfixOf` status = do
+      checkSessionStatus "ncbi" rid walltime consumedTime
+  --Unexpected status, return Left
+  | otherwise = do
+      let exceptionMessage = "Status has unexpected value " ++ status ++ " - aborting blast search\n"
+      return (Left exceptionMessage)
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
-performQuery :: String -> String -> String -> [Sequence] -> Maybe String -> IO (Either String BlastResult)                               
-performQuery provider' program' database' querySequences' optionalArgumentMaybe
+performQuery :: String -> String -> String -> [Sequence] -> Maybe String -> Maybe Int -> IO (Either String BlastResult)                               
+performQuery provider' program' database' querySequences' optionalArgumentMaybe walltime
   | null querySequences' = do 
       let exceptionMessage = "Error - no query sequence provided"
       return (Left exceptionMessage)
   | otherwise = do
      let sequenceString = urlEncode (concatMap showSequenceString querySequences')
      rid <- startSession provider' program' database' sequenceString optionalArgumentMaybe
-     checkSessionStatus provider' rid
+     checkSessionStatus provider' rid walltime (0 :: Int)
 
 showSequenceString :: Sequence -> String
 showSequenceString fastaSequence = sequenceString
@@ -185,12 +201,16 @@ showSequenceString fastaSequence = sequenceString
 -- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
 -- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
 blastHTTP :: BlastHTTPQuery -> IO (Either String BlastResult)
-blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalArguments') = do
+blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalArguments' walltime') = do
   let defaultProvider = "ncbi"
   let defaultProgram = "blastn"
   let defaultDatabase = "refseq_genomic"   
+  let defaultWalltime = Nothing
   let selectedProvider = fromMaybe defaultProvider provider'
   let selectedProgram = fromMaybe defaultProgram program'
   let selectedDatabase = fromMaybe defaultDatabase database'  
-  performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments'
+  let selectedWalltime = maybe defaultWalltime Just walltime'
+  --walltime of 1h in microseconds
+  --let walltime = Just (7200000000 ::Int)
+  performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
 
