@@ -1,0 +1,7 @@
+-*-change-log-*-
+1.0.2 Florian Eggenhofer <florian.eggenhofer@univie.ac.at> 20. April 2015
+	* Added experimental support for the european bioinformatics institute blast REST interface
+	* Added support for multiple sequences in one request
+1.0.1 Florian Eggenhofer <florian.eggenhofer@univie.ac.at> 09. October 2014
+	* Added README.md, travis CI support
+	* Added new optionalArgument parameter enabling submission of optional blast search parameters, like e-value cutoff
