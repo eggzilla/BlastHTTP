@@ -7,7 +7,7 @@ name:                BlastHTTP
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             1.2.0
+version:             1.2.1
 synopsis:            Libary to interface with the NCBI blast REST interface
 description:         Searches for a provided nucleotide or protein sequence with the NCBI Blast REST service and returns a blast result in xml format as BlastResult datatype. 
                      .
@@ -35,9 +35,9 @@ source-repository head
   location: https://github.com/eggzilla/BlastHTTP
 
 source-repository this
-  type:     darcs
-  location: https://github.com/eggzilla/BlastHTTP/tree/1.0.1
-  tag:      1.0.1
+  type:     git
+  location: https://github.com/eggzilla/BlastHTTP/tree/1.2.1
+  tag:      1.2.1
 
 library
   -- Modules exported by the library.

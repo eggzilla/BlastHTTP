@@ -1,4 +1,6 @@
 -*-change-log-*-
+1.2.1 Florian Eggenhofer <egg@informatik.uni-freiburg.de> 12. November 2016
+	* Changed used NCBI URL to HTTPS
 1.2.0 Florian Eggenhofer <florian.eggenhofer@univie.ac.at> 20. April 2015
 	* Added experimental support for the european bioinformatics institute blast REST interface
 	* Added support for multiple sequences in one request
