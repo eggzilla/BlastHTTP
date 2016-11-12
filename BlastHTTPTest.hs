@@ -1,5 +1,5 @@
 -- | BlastHTTP test script
--- /scr/kronos/egg/ghc/ghc/bin/runghc BlastHTTPTest.hs /home/mescalin/egg/initialfasta/RybB/aeromonas.fa
+--runghc -package-db --ghc-arg=.cabal-sandbox/x86_64-linux-ghc-8.0.1-packages.conf.d/ BlastHTTPTest.hs aeromonas.fa
 
 module Main where
     
@@ -24,7 +24,7 @@ main = do
   putStrLn "Test:"
   inputFasta <- readFasta input_file
   --let blastQuery = BlastHTTPQuery (Just "ebi") (Just "blastn") (Just "em_rel_mam") (Just fastaSeqData) Nothing
-  let blastQuery = BlastHTTPQuery (Just "ncbi") (Just "blastn") (Just "nt") inputFasta Nothing
+  let blastQuery = BlastHTTPQuery (Just "ncbi") (Just "blastn") (Just "nt") inputFasta Nothing (Just (7200000000 ::Int))
   blastOutput <- blastHTTP blastQuery 
   print blastOutput
 
