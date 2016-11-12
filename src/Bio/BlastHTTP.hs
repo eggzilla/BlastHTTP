@@ -97,8 +97,8 @@ sendQueryEBI program' database' querySequences' _ = do
 -- | Send query with or without optional arguments and return response HTML
 sendQueryNCBI :: String -> String -> String -> Maybe String -> IO L8.ByteString
 sendQueryNCBI program' database' querySequences' optionalArguments'
-  | isJust optionalArguments' = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ fromJust optionalArguments' ++ "&QUERY=" ++ querySequences')
-  | otherwise = simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ "&QUERY=" ++ querySequences')
+  | isJust optionalArguments' = simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ fromJust optionalArguments' ++ "&QUERY=" ++ querySequences')
+  | otherwise = simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Put&PROGRAM=" ++ program' ++ "&DATABASE=" ++ database' ++ "&QUERY=" ++ querySequences')
          
 -- | Retrieve session status with RID
 retrieveSessionStatus :: String -> String -> IO String 
@@ -110,7 +110,7 @@ retrieveSessionStatus provider' rid = do
        putStrLn "EBI statusXMLString"
        return statusXMLString
      else do
-       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
+       statusXml <- withSocketsDo $ simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?CMD=Get&FORMAT_OBJECT=SearchInfo&RID=" ++ rid)
        let statusXMLString = L8.unpack statusXml
        return statusXMLString
   
@@ -123,7 +123,7 @@ retrieveResult provider' rid = do
        resultXML <- parseXML statusXml
        return (Right resultXML)
      else do
-       statusXml <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
+       statusXml <- withSocketsDo $ simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
        resultXML <- parseXML statusXml
        return (Right resultXML)
  
