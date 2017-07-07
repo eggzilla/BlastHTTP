@@ -33,6 +33,7 @@ import Data.Maybe
 import Bio.Core.Sequence
 import Bio.Sequence.Fasta
 import Network.HTTP.Base
+import Biobase.BLAST
 
 data BlastHTTPQuery = BlastHTTPQuery 
   { provider :: Maybe String
@@ -214,3 +215,30 @@ blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalA
   --let walltime = Just (7200000000 ::Int)
   performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
 
+-- | Retrieve Blast results in Blast tabular format from the NCBI REST Blast interface
+-- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
+-- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
+blastTabularHTTP :: BlastHTTPQuery -> IO [BlastTabularResult]
+blastTabularHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalArguments' walltime') = do
+  let defaultProvider = "ncbi"
+  let defaultProgram = "blastn"
+  let defaultDatabase = "refseq_genomic"   
+  let defaultWalltime = Nothing
+  let selectedProvider = fromMaybe defaultProvider provider'
+  let selectedProgram = fromMaybe defaultProgram program'
+  let selectedDatabase = fromMaybe defaultDatabase database'  
+  let selectedWalltime = maybe defaultWalltime Just walltime'
+  --walltime of 1h in microseconds
+  --let walltime = Just (7200000000 ::Int)
+  performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
+
+-- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
+performTabularQuery :: String -> String -> String -> [Sequence] -> Maybe String -> Maybe Int -> IO [BlastTabularResult]                           
+performQuery provider' program' database' querySequences' optionalArgumentMaybe walltime
+  | null querySequences' = do 
+      let exceptionMessage = "Error - no query sequence provided"
+      return (Left exceptionMessage)
+  | otherwise = do
+     let sequenceString = urlEncode (concatMap showSequenceString querySequences')
+     rid <- startSession provider' program' database' sequenceString optionalArgumentMaybe
+     checkSessionStatus provider' rid walltime (0 :: Int)
