@@ -18,7 +18,9 @@
 --
 -- If you plan to submit more than 20 searches in one session, please look up the Usage Guidelines in the webservice information <http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml>.
 module Bio.BlastHTTP ( BlastHTTPQuery (..),
-                       blastHTTP) where
+                       blastHTTP,
+                       blastTabularHTTP,
+                     ) where
 
 import Network.HTTP.Conduit    
 import qualified Data.ByteString.Lazy.Char8 as L8 
@@ -33,6 +35,10 @@ import Data.Maybe
 import Bio.Core.Sequence
 import Bio.Sequence.Fasta
 import Network.HTTP.Base
+import Biobase.BLAST.Import
+import Biobase.BLAST.Types
+import qualified Data.Either.Unwrap as E
+import Data.Int
 
 data BlastHTTPQuery = BlastHTTPQuery 
   { provider :: Maybe String
@@ -123,13 +129,29 @@ retrieveResult provider' rid = do
        resultXML <- parseXML statusXml
        return (Right resultXML)
      else do
-       statusXml <- withSocketsDo $ simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
-       resultXML <- parseXML statusXml
-       return (Right resultXML)
- 
+       resultResponse <- withSocketsDo $ simpleHttp ("http://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=XML&FORMAT_OBJECT=Alignment&CMD=Get")
+       resultXML <- parseXML resultResponse
+       let rightXML = Right resultXML
+       return rightXML
+
+-- | Retrieve result in blast tabular format with RID 
+retrieveTabularResult :: String -> String -> IO (Either String [BlastTabularResult])
+retrieveTabularResult provider' rid = do
+  if provider' == "ebi"
+     then do
+       resultResponse <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/result/" ++ rid ++ "/Tabular")
+       let resultHeaderLessResponse = L8.drop (60  :: Int64) resultResponse
+       let resultTabular = parseTabularBlasts resultHeaderLessResponse
+       return (Right resultTabular)
+     else do
+       resultResponse <- withSocketsDo $ simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=Tabular&FORMAT_OBJECT=Alignment&CMD=Get")     
+       let resultTabular = (parseTabularBlasts resultResponse)
+       return (Right resultTabular)
+
+                  
 -- | Check if job results are ready and then retrieves results
 --   If a walltime in microseconds was set query retrieval will termiate after it is consumed and return a Left result
-checkSessionStatus :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+checkSessionStatus :: String -> String -> Maybe Int -> Int -> IO (Either String String)
 checkSessionStatus provider' rid walltime consumedTime = do
     threadDelay 120000000
     status <- retrieveSessionStatus provider' rid
@@ -144,14 +166,14 @@ checkSessionStatus provider' rid walltime consumedTime = do
              let exceptionMessage = "BLASTHTTP: Query did not return result within walltime"
              return (Left exceptionMessage)
 
-waitOrRetrieve :: String -> String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieve :: String -> String -> String -> Maybe Int -> Int -> IO (Either String String)
 waitOrRetrieve provider' status rid walltime consumedTime
   | provider' == "ebi" = waitOrRetrieveEBI status rid walltime consumedTime
   | otherwise = waitOrRetrieveNCBI status rid walltime consumedTime
 
-waitOrRetrieveEBI :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieveEBI :: String -> String -> Maybe Int -> Int -> IO (Either String String)
 waitOrRetrieveEBI status rid walltime consumedTime
-  | "FINISHED" `isInfixOf` status = retrieveResult "ebi" rid
+  | "FINISHED" `isInfixOf` status = return (Right rid) -- retrieveResult ouputFormat "ebi" rid
   | "FAILURE" `isInfixOf` status = do
       let exceptionMessage = "BLASTHTTP: The EBI blast job failed."
       return (Left exceptionMessage)
@@ -164,9 +186,9 @@ waitOrRetrieveEBI status rid walltime consumedTime
 -- RUNNING
   | otherwise = checkSessionStatus "ebi" rid walltime consumedTime
 
-waitOrRetrieveNCBI :: String -> String -> Maybe Int -> Int -> IO (Either String BlastResult)
+waitOrRetrieveNCBI :: String -> String -> Maybe Int -> Int -> IO (Either String String)
 waitOrRetrieveNCBI status rid walltime consumedTime
-  | "Status=READY" `isInfixOf` status = retrieveResult "ncbi" rid
+  | "Status=READY" `isInfixOf` status = return (Right rid) -- retrieveResult "ncbi" rid
   | "Status=FAILURE" `isInfixOf` status = do
       let exceptionMessage = "Search $rid failed; please report to blast-help at ncbi.nlm.nih.gov.\n"
       return (Left exceptionMessage)
@@ -190,6 +212,10 @@ performQuery provider' program' database' querySequences' optionalArgumentMaybe 
      let sequenceString = urlEncode (concatMap showSequenceString querySequences')
      rid <- startSession provider' program' database' sequenceString optionalArgumentMaybe
      checkSessionStatus provider' rid walltime (0 :: Int)
+     sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
+     if E.isRight sessionStatus
+        then retrieveResult provider' rid
+        else return (Left (E.fromLeft sessionStatus))
 
 showSequenceString :: Sequence -> String
 showSequenceString fastaSequence = sequenceString
@@ -214,3 +240,33 @@ blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalA
   --let walltime = Just (7200000000 ::Int)
   performQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
 
+-- | Retrieve Blast results in Blast tabular format from the NCBI REST Blast interface
+-- The querySequence has to be provided, all other parameters are optional and can be set to Nothing
+-- optionalArguments is attached to the query as is .e.g: "&ALIGNMENTS=250"
+blastTabularHTTP :: BlastHTTPQuery -> IO (Either String [BlastTabularResult])
+blastTabularHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalArguments' walltime') = do
+  let defaultProvider = "ncbi"
+  let defaultProgram = "blastn"
+  let defaultDatabase = "refseq_genomic"   
+  let defaultWalltime = Nothing
+  let selectedProvider = fromMaybe defaultProvider provider'
+  let selectedProgram = fromMaybe defaultProgram program'
+  let selectedDatabase = fromMaybe defaultDatabase database'  
+  let selectedWalltime = maybe defaultWalltime Just walltime'
+  --walltime of 1h in microseconds
+  --let walltime = Just (7200000000 ::Int)
+  performTabularQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
+
+-- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided 
+performTabularQuery :: String -> String -> String -> [Sequence] -> Maybe String -> Maybe Int -> IO (Either String [BlastTabularResult])
+performTabularQuery provider' program' database' querySequences' optionalArgumentMaybe walltime
+  | null querySequences' = do 
+      let exceptionMessage = "Error - no query sequence provided"
+      return (Left exceptionMessage)
+  | otherwise = do
+     let sequenceString = urlEncode (concatMap showSequenceString querySequences')
+     rid <- startSession provider' program' database' sequenceString (Just (maybe "&FORMAT_TYPE=TABULAR" ("&FORMAT_TYPE=TABULAR" ++) optionalArgumentMaybe))
+     sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
+     if E.isRight sessionStatus
+        then retrieveTabularResult provider' rid
+        else return (Left (E.fromLeft sessionStatus))      
