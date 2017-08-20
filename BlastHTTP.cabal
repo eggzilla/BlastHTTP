@@ -20,7 +20,7 @@ cabal-version:       >=1.8
 Tested-With: GHC == 7.6.3, GHC == 7.8.4, GHC == 7.10.3, GHC == 8.0.2, GHC == 8.2.1                     
 
 extra-source-files:
-  README.md changelog tests/*.golden tests/*.test
+  README.md changelog
   
 source-repository head
   type:     git

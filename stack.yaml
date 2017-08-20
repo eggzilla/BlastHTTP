@@ -1,0 +1,7 @@
+flags: {}
+packages:
+- .
+extra-deps:
+- BiobaseBlast-0.2.1.0
+compiler-check: newer-minor
+resolver: lts-9.1
