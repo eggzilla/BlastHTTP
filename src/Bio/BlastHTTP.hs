@@ -141,12 +141,10 @@ retrieveTabularResult provider' rid = do
      then do
        resultResponse <- withSocketsDo $ simpleHttp ("http://www.ebi.ac.uk/Tools/services/rest/ncbiblast/result/" ++ rid ++ "/Tabular")
        let resultHeaderLessResponse = L8.drop (0  :: Int64) resultResponse
-       L8.writeFile "/home/egg/current/Haskell/BlastHTTP/tab.out" resultResponse
        let resultTabular = parseTabularHTTPBlasts resultHeaderLessResponse
        return (Right resultTabular)
      else do
        resultResponse <- withSocketsDo $ simpleHttp ("https://www.ncbi.nlm.nih.gov/blast/Blast.cgi?RESULTS_FILE=on&RID=" ++ rid ++ "&FORMAT_TYPE=Tabular&FORMAT_OBJECT=Alignment&CMD=Get")
-       L8.writeFile "/home/egg/current/Haskell/BlastHTTP/tab.out" resultResponse
        let resultHeaderLessResponse = L8.drop (60  :: Int64) resultResponse
        let resultTabular = parseTabularHTTPBlasts resultHeaderLessResponse
        return (Right resultTabular)
