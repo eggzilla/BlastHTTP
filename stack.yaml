@@ -3,5 +3,12 @@ packages:
 - .
 extra-deps:
 - BiobaseBlast-0.2.1.0
+- BiobaseTypes-0.1.2.1
+- BiobaseXNA-0.9.3.1
+- PrimitiveArray-0.8.0.1
+- http-conduit-2.3.0
+- DPutils-0.0.1.0
+- OrderedBits-0.0.1.2
+- bimaps-0.1.0.2
 compiler-check: newer-minor
-resolver: lts-9.1
+resolver: lts-10.6
