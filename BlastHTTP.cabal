@@ -17,7 +17,7 @@ homepage:	     https://github.com/eggzilla/BlastHTTP
 category:            Bioinformatics
 build-type:          Simple
 cabal-version:       >=1.8
-Tested-With: GHC == 8.0.2, GHC == 8.2.2 
+Tested-With: GHC == 8.4.3
 
 extra-source-files:
   README.md changelog
@@ -33,6 +33,18 @@ source-repository this
 
 library
   exposed-modules:     Bio.BlastHTTP
-  build-depends:       base >=4.5 && <5, transformers, bytestring, conduit, HTTP, http-conduit, hxt, network, mtl, blastxml, biocore, biofasta, BiobaseBlast >=0.2.1.0, either-unwrap
+  build-depends:       base >=4.5 && <5,
+                       transformers,
+                       bytestring,
+                       conduit,
+                       HTTP,
+                       http-conduit,
+                       hxt,
+                       network,
+                       mtl,
+                       BiobaseBlast >=0.3.0.0,
+                       BiobaseFasta >=0.2.0.0,
+                       either-unwrap,
+                       zip-archive
   ghc-options:         -Wall
   hs-source-dirs:      src
