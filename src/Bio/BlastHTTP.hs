@@ -144,7 +144,6 @@ retrieveJSONResult provider' rid = do
   let archive = CZ.toArchive resultResponse
   let files = CZ.filesInArchive archive
   let bs = CZ.fromEntry (fromJust (CZ.findEntryByPath (files !! 1) archive))
-  L8.writeFile "/home/egg/current/Haskell/BlastHTTP/dump.json" bs
   let eitherjson = parseJSONBlast bs
   return eitherjson   
 
