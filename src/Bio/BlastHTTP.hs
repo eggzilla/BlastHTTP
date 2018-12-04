@@ -35,7 +35,7 @@ import Network.HTTP.Base
 import Biobase.BLAST.Import
 import Biobase.BLAST.Types
 import Biobase.Fasta.Types
-import Biobase.Fasta.Export
+import Biobase.Fasta.Export()
 import qualified Data.Either.Unwrap as E
 import Data.Int
 --import Debug.Trace
@@ -145,7 +145,7 @@ retrieveJSONResult provider' rid = do
   let files = CZ.filesInArchive archive
   let bs = CZ.fromEntry (fromJust (CZ.findEntryByPath (files !! 1) archive))
   let eitherjson = parseJSONBlast bs
-  return eitherjson   
+  return eitherjson
 
 -- | Check if job results are ready and then retrieves results
 --   If a walltime in microseconds was set query retrieval will termiate after it is consumed and return a Left result
