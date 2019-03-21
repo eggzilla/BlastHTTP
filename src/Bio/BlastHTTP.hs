@@ -34,8 +34,8 @@ import Data.Maybe
 import Network.HTTP.Base
 import Biobase.BLAST.Import
 import Biobase.BLAST.Types
-import Biobase.Fasta.Types
-import Biobase.Fasta.Export()
+import Biobase.Fasta.Strict
+--import Biobase.Fasta.Export()
 import qualified Data.Either.Unwrap as E
 import Data.Int
 --import Debug.Trace
@@ -46,7 +46,7 @@ data BlastHTTPQuery = BlastHTTPQuery
   { provider :: Maybe String
   , program :: Maybe String
   , database :: Maybe String
-  , querySequences :: [Fasta]
+  , querySequences :: [Fasta () ()]
   , optionalArguments :: Maybe String
   , optionalWalltime :: Maybe Int
   }
@@ -235,13 +235,15 @@ blastHTTP (BlastHTTPQuery provider' program' database' querySequences' optionalA
   performJSONQuery selectedProvider selectedProgram selectedDatabase querySequences' optionalArguments' selectedWalltime
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided
-performTabularQuery :: String -> String -> String -> [Fasta] -> Maybe String -> Maybe Int -> IO (Either String [BlastTabularResult])
+performTabularQuery :: String -> String -> String -> [Fasta () ()] -> Maybe String -> Maybe Int -> IO (Either String [BlastTabularResult])
 performTabularQuery provider' program' database' querySequences' optionalArgumentMaybe walltime
   | null querySequences' = do
       let exceptionMessage = "Error - no query sequence provided"
       return (Left exceptionMessage)
   | otherwise = do
-     let sequenceString = urlEncode (concatMap show querySequences')
+     -- TODO do not use @concatMap show@. @concat . intersperse "\n" . map (convertString.fastaToByteString 999999999)@ might be ok
+     let sequenceString = urlEncode . concat . intersperse "\n" $ map (convertString . fastaToByteString 999999999) querySequences'
+     -- (concatMap show querySequences')
      rid <- startSession provider' program' database' sequenceString (Just (maybe "&FORMAT_TYPE=TABULAR" ("&FORMAT_TYPE=TABULAR" ++) optionalArgumentMaybe))
      sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
      if E.isRight sessionStatus
@@ -250,13 +252,15 @@ performTabularQuery provider' program' database' querySequences' optionalArgumen
 
 
 -- | Sends Query and retrieves result on reaching READY status, will return exeption message if no query sequence has been provided
-performJSONQuery :: String -> String -> String -> [Fasta] -> Maybe String -> Maybe Int -> IO (Either String BlastJSON2)
+performJSONQuery :: String -> String -> String -> [Fasta () ()] -> Maybe String -> Maybe Int -> IO (Either String BlastJSON2)
 performJSONQuery provider' program' database' querySequences' optionalArgumentMaybe walltime
   | null querySequences' = do
       let exceptionMessage = "Error - no query sequence provided"
       return (Left exceptionMessage)
   | otherwise = do
-     let sequenceString = urlEncode (concatMap show querySequences')
+     -- TODO see comment above!
+     -- let sequenceString = urlEncode (concatMap show querySequences')
+     let sequenceString = urlEncode . concat . intersperse "\n" $ map (convertString . fastaToByteString 999999999) querySequences'
      rid <- startSession provider' program' database' sequenceString (Just (maybe "" ("" ++) optionalArgumentMaybe))
      sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
      --result <- retrieveJSONResult provider' rid
