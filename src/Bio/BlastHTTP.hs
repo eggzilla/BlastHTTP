@@ -241,8 +241,8 @@ performTabularQuery provider' program' database' querySequences' optionalArgumen
       let exceptionMessage = "Error - no query sequence provided"
       return (Left exceptionMessage)
   | otherwise = do
-     -- TODO do not use @concatMap show@. @concat . intersperse "\n" . map (convertString.fastaToByteString 999999999)@ might be ok
-     let sequenceString = urlEncode . concat . intersperse "\n" $ map (convertString . fastaToByteString 999999999) querySequences'
+     -- TODO do not use @concatMap show@.
+     let sequenceString = urlEncode $ concatMap (convertString . fastaToByteString 999999999) querySequences'
      -- (concatMap show querySequences')
      rid <- startSession provider' program' database' sequenceString (Just (maybe "&FORMAT_TYPE=TABULAR" ("&FORMAT_TYPE=TABULAR" ++) optionalArgumentMaybe))
      sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
@@ -260,7 +260,7 @@ performJSONQuery provider' program' database' querySequences' optionalArgumentMa
   | otherwise = do
      -- TODO see comment above!
      -- let sequenceString = urlEncode (concatMap show querySequences')
-     let sequenceString = urlEncode . concat . intersperse "\n" $ map (convertString . fastaToByteString 999999999) querySequences'
+     let sequenceString = urlEncode $ concatMap (convertString . fastaToByteString 999999999) querySequences'
      rid <- startSession provider' program' database' sequenceString (Just (maybe "" ("" ++) optionalArgumentMaybe))
      sessionStatus <- checkSessionStatus provider' rid walltime (0 :: Int)
      --result <- retrieveJSONResult provider' rid
