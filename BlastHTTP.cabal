@@ -43,7 +43,7 @@ library
                        network,
                        mtl,
                        BiobaseBlast >=0.3.0.0,
-                       BiobaseFasta >=0.2.0.0,
+                       BiobaseFasta == 0.2.0.*,
                        either-unwrap,
                        zip-archive
   ghc-options:         -Wall
