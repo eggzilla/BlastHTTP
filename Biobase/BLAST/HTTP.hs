@@ -17,7 +17,7 @@
 -- and returns Either a BlastReport (Right) on success or an exception as String (Left)
 --
 -- If you plan to submit more than 20 searches in one session, please look up the Usage Guidelines in the webservice information <http://www.ncbi.nlm.nih.gov/BLAST/developer.shtml>.
-module Bio.BlastHTTP ( BlastHTTPQuery (..),
+module Biobase.BLAST.HTTP ( BlastHTTPQuery (..),
                        blastHTTP,
                        blastTabularHTTP,
                      ) where
