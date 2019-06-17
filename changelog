@@ -1,5 +1,5 @@
 -*-change-log-*-
-1.4.0 Florian Eggenhofer <egg@informatik.uni-freiburg.de> 27. March 2019
+1.4.0 Florian Eggenhofer <egg@informatik.uni-freiburg.de> 17. June 2019
 	* Compatibility with Biobase
 	* Added requests with JSON2 response as default
 	* Using Biobase.Fasta for encoding query sequences
