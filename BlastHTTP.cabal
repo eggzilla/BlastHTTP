@@ -16,7 +16,7 @@ copyright:           Florian Eggenhofer
 homepage:	     https://github.com/eggzilla/BlastHTTP
 category:            Bioinformatics
 build-type:          Simple
-cabal-version:       >=1.8
+cabal-version:       >=1.10.0
 Tested-With: GHC == 8.4.3
 
 extra-source-files:
