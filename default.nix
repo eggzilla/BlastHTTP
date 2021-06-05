@@ -4,7 +4,7 @@
 }:
 mkDerivation {
   pname = "BlastHTTP";
-  version = "1.3.0";
+  version = "1.4.2";
   src = ./.;
   libraryHaskellDepends = [
     base BiobaseBlast BiobaseFasta bytestring conduit either-unwrap
