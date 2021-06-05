@@ -1,5 +1,11 @@
 -*-change-log-*-
 
+### 1.4.2 [Florian Eggenhofer](mailto:egg@informatik.uni-freiburg.de) 6. June 2021
+
+	* Compatibility with ghc 9.0.1
+	* Swutched testing to github actions
+
+
 ### 1.4.1 [Florian Eggenhofer](mailto:egg@informatik.uni-freiburg.de) 20. August 2019
 
 	* Adjusting version constraint for BiobaseBlast

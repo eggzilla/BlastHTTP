@@ -1,5 +1,5 @@
 name:                BlastHTTP
-version:             1.4.1
+version:             1.4.2
 synopsis:            Libary to interface with the NCBI blast REST interface
 description:         Searches for a provided nucleotide or protein sequence with the NCBI Blast REST service and returns a blast result in xml format as BlastResult datatype. 
                      .
@@ -28,8 +28,8 @@ source-repository head
 
 source-repository this
   type:     git
-  location: https://github.com/eggzilla/BlastHTTP/tree/1.4.1
-  tag:      1.4.1
+  location: https://github.com/eggzilla/BlastHTTP/tree/1.4.2
+  tag:      1.4.2
 
 library
   exposed-modules:     Biobase.BLAST.HTTP
@@ -42,8 +42,8 @@ library
                        hxt,
                        network ==2.8.0.0,
                        mtl,
-                       BiobaseBlast ==0.3.1.*,
-                       BiobaseFasta ==0.3.0.*,
+                       BiobaseBlast ==0.3.3.*,
+                       BiobaseFasta ==0.4.0.*,
                        either-unwrap,
                        zip-archive
   default-language:    Haskell2010
